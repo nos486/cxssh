@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CxSSH — Web SSH Manager</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <style>
+    /* ─── SPA Layout ─── */
+    .spa-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      height: 100vh;
+      overflow: hidden;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      background: rgba(10,13,20,0.8);
+      backdrop-filter: blur(20px);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 10;
+    }
+    .sidebar-header {
+      padding: 24px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-nav {
+      flex: 1;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 4px;
+      overflow-y: auto;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+      font-size: 14px; font-weight: 500;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent); color: #fff; box-shadow: var(--shadow-accent); }
+    
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ─── Main Content Area ─── */
+    .main-area {
+      display: flex; flex-direction: column;
+      position: relative;
+    }
+
+    /* ─── Views ─── */
+    .view-container {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 24px;
+    }
+    .view-container.active { display: flex; }
+
+    /* ─── Terminal Tab Manager ─── */
+    .terminal-view {
+      padding: 0;
+      background: #0d0d0d;
+    }
+    .terminal-header {
+      height: 42px;
+      background: rgba(10,13,20,0.95);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding-right: 12px;
+    }
+    .tab-bar {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    
+    .tab-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 16px;
+      height: 100%;
+      min-width: 140px; max-width: 200px;
+      border-right: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 13px; cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: background var(--transition);
+    }
+    .tab-item.active {
+      background: #0d0d0d;
+      color: var(--text-primary);
+      border-bottom: 2px solid var(--accent);
+    }
+    .tab-item:hover:not(.active) { background: var(--bg-hover); }
+    
+    .tab-close {
+      opacity: 0;
+      width: 18px; height: 18px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      transition: all var(--transition);
+    }
+    .tab-item:hover .tab-close { opacity: 1; }
+    .tab-close:hover { background: rgba(239,68,68,0.2); color: var(--danger); }
+
+    .term-panes {
+      flex: 1;
+      position: relative;
+    }
+    .term-pane {
+      position: absolute; inset: 0;
+      display: none;
+      padding: 4px;
+    }
+    .term-pane.active { display: block; }
+
+    /* ─── Drag and Drop ─── */
+    .tab-item.dragging { opacity: 0.5; background: var(--accent); }
+
+    /* ─── Key/Proxy/Server Grids ─── */
+    .data-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+
+  <div class="spa-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">⚡</div>
+        <span class="brand-name" style="font-size: 20px; font-weight: 700;">CxSSH</span>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-label">Connection</div>
+        <div class="nav-item active" data-view="dashboard">🖥️ Servers</div>
+        <div class="nav-item" data-view="terminal">⌨️ Terminals <span id="tabCountBadge" class="badge badge-accent" style="margin-left: auto; display:none;">0</span></div>
+        <div class="nav-item" data-view="sessions">💾 Saved Sessions</div>
+        
+        <div class="sidebar-label" style="margin-top: 24px;">Management</div>
+        <div class="nav-item" data-view="keys">🔑 SSH Keys</div>
+        <div class="nav-item" data-view="proxies">🌐 Proxies</div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-chip" style="margin-bottom: 12px; width: 100%;">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <span id="userNameDisplay">admin</span>
+        </div>
+        <button class="btn btn-ghost btn-sm w-full" id="logoutBtn">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-area">
+      <!-- 1. Dashboard / Servers View -->
+      <section id="view-dashboard" class="view-container active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">SSH Servers</h1>
+            <p class="page-subtitle" id="serverCountLabel">Manage your remote servers</p>
+          </div>
+          <div class="flex gap-3">
+            <input class="form-input" type="search" id="serverSearch" placeholder="Search servers..." />
+            <button class="btn btn-primary" id="addServerBtn">＋ Add Server</button>
+          </div>
+        </div>
+        <div class="server-grid mt-4" id="serverGrid"></div>
+      </section>
+
+      <!-- 2. Terminal View -->
+      <section id="view-terminal" class="view-container terminal-view">
+        <div class="terminal-header">
+          <div class="tab-bar" id="tabBar"></div>
+          <button class="tab-add" id="tabAddBtn" title="New Tab">＋</button>
+          <div style="flex:1"></div>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost btn-icon btn-sm" id="termClearBtn" title="Clear">🗑</button>
+            <button class="btn btn-danger btn-icon btn-sm" id="termDisconnectBtn" title="Disconnect">✕</button>
+          </div>
+        </div>
+        <div class="term-panes" id="termPanes">
+          <div class="empty-state" id="terminalEmptyState" style="height: 100%; justify-content: center;">
+            <div class="empty-state-icon">⌨️</div>
+            <div class="empty-state-title">No active terminals</div>
+            <div class="empty-state-desc">Select a server to connect or open a saved session.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Sessions View -->
+      <section id="view-sessions" class="view-container">
+        <div class="page-header">
+          <h1 class="page-title">Saved Sessions</h1>
+        </div>
+        <div class="data-grid mt-4" id="sessionGrid"></div>
+      </section>
+
+      <!-- 4. SSH Keys View -->
+      <section id="view-keys" class="view-container">
+        <div class="page-header">
+          <h1 class="page-title">SSH Keys</h1>
+          <button class="btn btn-primary" id="addKeyBtn">＋ Add Key</button>
+        </div>
+        <div class="keys-grid mt-4" id="keysGrid"></div>
+      </section>
+
+      <!-- 5. Proxies View -->
+      <section id="view-proxies" class="view-container">
+        <div class="page-header">
+          <h1 class="page-title">Proxy Profiles</h1>
+          <button class="btn btn-primary" id="addProxyBtn">＋ Add Proxy</button>
+        </div>
+        <div class="data-grid mt-4" id="proxyGrid"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ─── Modals ─── -->
+  <!-- Server Modal -->
+  <div class="modal-overlay" id="serverModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="serverModalTitle">Add Server</h2>
+        <button class="modal-close" onclick="closeModal('serverModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Server Name *</label>
+          <input class="form-input" type="text" id="sName" placeholder="My Server" />
+        </div>
+        <div class="flex gap-2">
+          <div class="form-group flex-1">
+            <label class="form-label">Hostname / IP *</label>
+            <input class="form-input font-mono" type="text" id="sHost" />
+          </div>
+          <div class="form-group" style="width: 100px;">
+            <label class="form-label">Port</label>
+            <input class="form-input font-mono" type="number" id="sPort" value="22" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username *</label>
+          <input class="form-input font-mono" type="text" id="sUsername" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Authentication</label>
+          <select class="form-select" id="sAuthType">
+            <option value="password">Password</option>
+            <option value="managed_key">Managed SSH Key</option>
+            <option value="key">Manual Private Key</option>
+          </select>
+        </div>
+        <div id="auth-password" class="auth-fields">
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-input" type="password" id="sPassword" />
+          </div>
+        </div>
+        <div id="auth-managed_key" class="auth-fields" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Select Key</label>
+            <select class="form-select" id="sKeyId"></select>
+          </div>
+        </div>
+        <div id="auth-key" class="auth-fields" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Private Key (PEM)</label>
+            <textarea class="form-textarea font-mono" id="sPrivateKey"></textarea>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Proxy Tunnel (Optional)</label>
+          <select class="form-select" id="sProxyId">
+            <option value="">No Proxy (Direct Connection)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Label Color</label>
+          <div class="color-picker" id="serverColorPicker"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="testServerBtn">🔌 Test</button>
+        <button class="btn btn-primary" id="saveServerBtn">Save Server</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Modal (existing logic) -->
+  <div class="modal-overlay" id="keyModal">
+    <div class="modal" style="max-width:450px">
+      <div class="modal-header">
+        <h2 class="modal-title">Add SSH Key</h2>
+        <button class="modal-close" onclick="closeModal('keyModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="dash-nav" style="margin-bottom: 12px;">
+          <button class="dash-nav-btn active" id="keyGenTab">Generate</button>
+          <button class="dash-nav-btn" id="keyImportTab">Import</button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Key Name *</label>
+          <input class="form-input" type="text" id="kName" />
+        </div>
+        <div id="keyGenFields">
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="kType">
+              <option value="ed25519">Ed25519</option>
+              <option value="rsa">RSA 4096</option>
+            </select>
+          </div>
+        </div>
+        <div id="keyImportFields" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Private Key</label>
+            <textarea class="form-textarea font-mono" id="kPrivate"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveKeyBtn">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proxy Modal -->
+  <div class="modal-overlay" id="proxyModal">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="proxyModalTitle">Add Proxy</h2>
+        <button class="modal-close" onclick="closeModal('proxyModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Profile Name *</label>
+          <input class="form-input" type="text" id="pName" placeholder="My Proxy" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="pType">
+            <option value="socks5">SOCKS5</option>
+            <option value="http">HTTP CONNECT</option>
+          </select>
+        </div>
+        <div class="flex gap-2">
+          <div class="form-group flex-1">
+            <label class="form-label">Host *</label>
+            <input class="form-input font-mono" type="text" id="pHost" />
+          </div>
+          <div class="form-group" style="width: 100px;">
+            <label class="form-label">Port *</label>
+            <input class="form-input font-mono" type="number" id="pPort" value="1080" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username (Optional)</label>
+          <input class="form-input" type="text" id="pUsername" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password (Optional)</label>
+          <input class="form-input" type="password" id="pPassword" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveProxyBtn">Save Proxy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

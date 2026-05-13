@@ -1,14 +1,47 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../auth');
-const { getServers, getServerById, createServer, updateServer, deleteServer, getKeyById } = require('../db');
+const { getServers, getServerById, createServer, updateServer, deleteServer, getKeyById, getProxyById } = require('../db');
 const { Client } = require('ssh2');
+const { SocksClient } = require('socks');
+const net = require('net');
 
 const router = express.Router();
 
 function sanitize(s) {
   const { password, private_key, ...safe } = s;
   return safe;
+}
+
+// ── Proxy Socket Helper ──────────────────────────────────────────────────────
+async function createProxiedSocket(server, proxy) {
+  if (proxy.type === 'socks5') {
+    const opts = {
+      proxy: { host: proxy.host, port: proxy.port, type: 5 },
+      command: 'connect',
+      destination: { host: server.host, port: server.port },
+    };
+    if (proxy.username) { opts.proxy.userId = proxy.username; opts.proxy.password = proxy.password || ''; }
+    const { socket } = await SocksClient.createConnection(opts);
+    return socket;
+  } else if (proxy.type === 'http') {
+    return new Promise((resolve, reject) => {
+      const sock = net.createConnection(proxy.port, proxy.host, () => {
+        const auth = proxy.username
+          ? `Proxy-Authorization: Basic ${Buffer.from(`${proxy.username}:${proxy.password || ''}`).toString('base64')}\r\n`
+          : '';
+        sock.write(`CONNECT ${server.host}:${server.port} HTTP/1.1\r\nHost: ${server.host}:${server.port}\r\n${auth}\r\n`);
+      });
+      const t = setTimeout(() => reject(new Error('Proxy timeout')), 10000);
+      sock.once('data', chunk => {
+        clearTimeout(t);
+        if (chunk.toString().includes('200')) resolve(sock);
+        else reject(new Error(`HTTP proxy error: ${chunk.toString().split('\n')[0]}`));
+      });
+      sock.once('error', err => { clearTimeout(t); reject(err); });
+    });
+  }
+  throw new Error(`Unknown proxy type: ${proxy.type}`);
 }
 
 // GET /api/servers
@@ -23,7 +56,7 @@ router.get('/:id', requireAuth, (req, res) => {
 
 // POST /api/servers
 router.post('/', requireAuth, (req, res) => {
-  const { name, host, port, username, auth_type, password, private_key, key_id, label_color, notes } = req.body;
+  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id, label_color, notes } = req.body;
   if (!name || !host || !username) return res.status(400).json({ error: 'name, host, and username are required' });
   const s = createServer({
     id: uuidv4(), name, host, port: port || 22, username,
@@ -31,6 +64,7 @@ router.post('/', requireAuth, (req, res) => {
     password: password || null,
     private_key: private_key || null,
     key_id: key_id || null,
+    proxy_id: proxy_id || null,
     label_color: label_color || '#6366f1',
     notes: notes || null,
   });
@@ -40,7 +74,7 @@ router.post('/', requireAuth, (req, res) => {
 // PUT /api/servers/:id
 router.put('/:id', requireAuth, (req, res) => {
   if (!getServerById(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','label_color','notes'];
+  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','notes'];
   const fields = {};
   for (const k of allowed) if (req.body[k] !== undefined) fields[k] = req.body[k];
   res.json(sanitize(updateServer(req.params.id, fields)));
@@ -54,7 +88,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 });
 
 // POST /api/servers/:id/test
-router.post('/:id/test', requireAuth, (req, res) => {
+router.post('/:id/test', requireAuth, async (req, res) => {
   const server = getServerById(req.params.id);
   if (!server) return res.status(404).json({ error: 'Not found' });
 
@@ -66,25 +100,34 @@ router.post('/:id/test', requireAuth, (req, res) => {
     conn.end();
     res.status(status).json({ ok, ...(ok ? { message: msg } : { error: msg }) });
   };
-  const timer = setTimeout(() => finish(false, 'Connection timed out', 408), 8000);
+  const timer = setTimeout(() => finish(false, 'Connection timed out', 408), 15000);
 
-  const opts = {
-    host: server.host, port: server.port, username: server.username, readyTimeout: 7000,
-  };
-  if (server.auth_type === 'managed_key' && server.key_id) {
-    const key = getKeyById(server.key_id);
-    if (key) opts.privateKey = key.private_key;
-  } else if (server.auth_type === 'key' && server.private_key) {
-    opts.privateKey = server.private_key;
-  } else {
-    opts.password = server.password;
-    opts.tryKeyboard = true;
+  try {
+    const opts = {
+      host: server.host, port: server.port, username: server.username, readyTimeout: 12000,
+    };
+    if (server.auth_type === 'managed_key' && server.key_id) {
+      const key = getKeyById(server.key_id);
+      if (key) opts.privateKey = key.private_key;
+    } else if (server.auth_type === 'key' && server.private_key) {
+      opts.privateKey = server.private_key;
+    } else {
+      opts.password = server.password;
+      opts.tryKeyboard = true;
+    }
+
+    if (server.proxy_id) {
+      const proxy = getProxyById(server.proxy_id);
+      if (proxy) opts.sock = await createProxiedSocket(server, proxy);
+    }
+
+    conn.on('ready', () => finish(true, 'Connection successful'))
+        .on('error', err => finish(false, err.message, 400))
+        .on('keyboard-interactive', (_n,_i,_l,_p, f) => f([server.password||'']))
+        .connect(opts);
+  } catch (e) {
+    finish(false, `Proxy error: ${e.message}`, 400);
   }
-
-  conn.on('ready', () => finish(true, 'Connection successful'))
-      .on('error', err => finish(false, err.message, 400))
-      .on('keyboard-interactive', (_n,_i,_l,_p, f) => f([server.password||'']))
-      .connect(opts);
 });
 
 module.exports = router;

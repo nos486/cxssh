@@ -4,19 +4,17 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { initDb } = require('./db');
 const { router: authRouter } = require('./auth');
-const serversRouter  = require('./routes/servers');
+const serversRouter = require('./routes/servers');
 const sessionsRouter = require('./routes/sessions');
-const keysRouter     = require('./routes/keys');
+const keysRouter    = require('./routes/keys');
+const proxyRouter   = require('./routes/proxy');
 const { setupWebSocket } = require('./ws');
 
 const PORT = process.env.PORT || 3000;
-
 initDb();
 
 const app = express();
-app.use(express.json({ limit: '4mb' })); // allow large private key pastes
-
-// Static frontend
+app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // API
@@ -24,10 +22,14 @@ app.use('/api/auth',     authRouter);
 app.use('/api/servers',  serversRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/keys',     keysRouter);
+app.use('/api/proxies',  proxyRouter);
 
-// SPA fallback
-app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, '../public/dashboard.html')));
-app.get('/terminal',  (req, res) => res.sendFile(path.join(__dirname, '../public/terminal.html')));
+// Routes
+app.get('/app',       (req, res) => res.sendFile(path.join(__dirname, '../public/app.html')));
+// Backwards compat redirects
+app.get('/dashboard', (req, res) => res.redirect('/app'));
+app.get('/terminal',  (req, res) => res.redirect('/app'));
+// Login / root
 app.get('*',          (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 const server = http.createServer(app);
@@ -36,5 +38,4 @@ setupWebSocket(wss);
 
 server.listen(PORT, () => {
   console.log(`[CxSSH] Server running on http://localhost:${PORT}`);
-  console.log(`[CxSSH] WebSocket SSH proxy on ws://localhost:${PORT}/ws/ssh`);
 });

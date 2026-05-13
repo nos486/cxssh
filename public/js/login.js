@@ -48,7 +48,7 @@ const loginForm = document.getElementById('loginForm');
 if (loginForm) {
   // Redirect if already logged in
   if (getToken()) {
-    window.location.href = '/dashboard';
+    window.location.href = '/app';
   }
 
   loginForm.addEventListener('submit', async (e) => {
@@ -71,7 +71,7 @@ if (loginForm) {
 
       if (data.token) {
         setToken(data.token);
-        window.location.href = '/dashboard';
+        window.location.href = '/app';
       } else {
         errorEl.textContent = data.error || 'Login failed';
         errorEl.style.display = 'block';
