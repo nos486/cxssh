@@ -125,12 +125,42 @@
       flex: 1;
       position: relative;
     }
+    .term-panes.grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      grid-auto-rows: 1fr;
+      gap: 1px;
+      background: var(--border);
+      overflow-y: auto;
+    }
     .term-pane {
       position: absolute; inset: 0;
       display: none;
       padding: 4px;
+      background: #0d0d0d;
+    }
+    .term-panes.grid .term-pane {
+      position: relative; inset: auto;
+      display: flex !important;
+      flex-direction: column;
+      border: 1px solid transparent;
+    }
+    .term-panes.grid .term-pane.active {
+      border-color: var(--accent);
     }
     .term-pane.active { display: block; }
+
+    .term-pane-header {
+      display: none;
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+      justify-content: space-between;
+      align-items: center;
+    }
+    .term-panes.grid .term-pane-header { display: flex; }
 
     /* ─── Drag and Drop ─── */
     .tab-item.dragging { opacity: 0.5; background: var(--accent); }
@@ -196,6 +226,7 @@
           <button class="tab-add" id="tabAddBtn" title="New Tab">＋</button>
           <div style="flex:1"></div>
           <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" id="termGridViewBtn" title="Toggle Grid/Tab View">🔳 Grid View</button>
             <button class="btn btn-ghost btn-icon btn-sm" id="termClearBtn" title="Clear">🗑</button>
             <button class="btn btn-danger btn-icon btn-sm" id="termDisconnectBtn" title="Disconnect">✕</button>
           </div>
@@ -300,7 +331,14 @@
 
         <div class="form-group">
           <label class="form-label">Label Color</label>
-          <div class="color-picker" id="serverColorPicker"></div>
+          <div class="color-picker" id="serverColorPicker">
+            <div class="color-pill" style="background:#6366f1" data-color="#6366f1"></div>
+            <div class="color-pill" style="background:#f43f5e" data-color="#f43f5e"></div>
+            <div class="color-pill" style="background:#22c55e" data-color="#22c55e"></div>
+            <div class="color-pill" style="background:#eab308" data-color="#eab308"></div>
+            <div class="color-pill" style="background:#a855f7" data-color="#a855f7"></div>
+            <div class="color-pill" style="background:#06b6d4" data-color="#06b6d4"></div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">

@@ -8,19 +8,20 @@
 
 ---
 
-## ✨ Features (v2.0)
+## ✨ Features (v2.1)
 
 | Feature | Description |
 |---|---|
 | 📱 **SPA Desktop UI** | Everything in one page — Sidebar navigation for a desktop app feel |
 | 🗂️ **Draggable Tabs** | Open multiple terminals and **drag-to-swap** them to organise your workspace |
+| 🔳 **Multi-Window Grid** | Toggle **Grid View** to see all active terminals side-by-side |
+| ♻️ **Infinite Persistence** | Refresh the page — SSH sessions stay alive and re-attach automatically |
 | 🌐 **Proxy Tunneling** | Connect to servers through **SOCKS5** or **HTTP CONNECT** proxies |
 | 🔐 **JWT Auth** | Secure login with 30-day sessions |
 | 🖥️ **Server Manager** | Add / edit / delete SSH servers with colour labels and proxy selection |
 | 🔑 **SSH Key Manager** | Generate `ed25519` / RSA keys or import existing ones |
-| ♻️ **Persistent Sessions** | Refresh the page — SSH sessions stay alive on the server |
 | 💾 **Saved Sessions** | One-click reconnect to favourite servers |
-| ⚡ **Full xterm.js** | 256-colour terminal with resize, web-links & scrollback |
+| ⚡ **Full xterm.js** | 256-colour terminal with automatic resize, web-links & scrollback |
 
 ---
 
@@ -46,43 +47,26 @@ Default login: **admin / admin**
 
 ---
 
-## 🌐 Proxy Setup
+## 🔳 Multi-Window & Grid View
 
-1. Navigate to **Proxies** in the sidebar.
-2. Click **+ Add Proxy** and configure your SOCKS5 or HTTP tunnel.
-3. Edit any **Server** and select the proxy profile from the dropdown.
-4. All connections (including tests) will now tunnel through that proxy.
-
----
-
-## 🗂️ Multi-Tab Terminal
-
-- Open terminals from the **Servers** or **Sessions** view.
-- Click **＋** in the terminal tab bar to connect to another server.
-- **Drag and Drop** tabs to reorder them exactly how you want.
-- Use the sidebar to switch between your dashboard and active terminals.
+- Connect to multiple servers.
+- In the **Terminal** view, click the **🔳 Grid View** button in the top right.
+- The layout will switch from tabs to a grid, allowing you to monitor and interact with all servers simultaneously.
+- Every window is independently resizable and fits its grid cell automatically.
 
 ---
 
 ## ♻️ Session Persistence
 
-If you accidentally refresh the page, your SSH sessions keep running server-side:
-- Reconnect instantly upon reload.
-- **150 KB output buffer** ensures you see what happened while you were away.
-- Idle sessions are cleaned up after **30 minutes** of inactivity.
+The app is designed for reliability:
+- **Refresh-Safe**: If you reload your browser, CxSSH uses `sessionStorage` and `resumeKeys` to re-establish your exact terminal environment.
+- **Background Alive**: The backend keeps the SSH connection active for up to 30 minutes even if you close your laptop, buffering output so you don't miss a thing.
 
 ---
 
-## 🏗️ Tech Stack
+## 🌐 Proxy Setup
 
-- **Backend**: Node.js 20, Express, `ssh2`, `ws`, `socks`, `better-sqlite3`
-- **Frontend**: Vanilla JS (SPA), xterm.js 5, CSS Glassmorphism
-- **Container**: Docker / Docker Compose
-
----
-
-## 🔒 Security Notes
-
-- **Change** `ADMIN_PASSWORD` and `JWT_SECRET` before exposing to the internet.
-- Use a reverse proxy (like Nginx or Caddy) for HTTPS.
-- SSH keys are stored in the local SQLite database (`/app/data/cxssh.db`).
+1. Navigate to **Proxies** in the sidebar.
+2. Configure your SOCKS5 or HTTP tunnel.
+3. Edit any **Server** and select the proxy profile.
+4. All connections will now tunnel through that proxy.
