@@ -57,6 +57,17 @@
 
       <!-- Workspace View (Window Manager) -->
       <section id="view-terminal" class="view-container terminal-view" style="display: flex; flex-direction: column; padding: 0;">
+        <div class="terminal-header" style="background: rgba(10,13,20,0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-bottom: 1px solid var(--border);">
+          <div class="flex items-center gap-3">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Active Sessions</span>
+            <button class="btn btn-ghost btn-sm" id="tabAddBtn">＋ New Session</button>
+          </div>
+          <div style="flex:1"></div>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" id="layoutGridBtn" title="Tile Grid">⊞</button>
+            <button class="btn btn-ghost btn-sm" id="layoutStackBtn" title="Stack Vertical">≡</button>
+          </div>
+        </div>
         <div class="terminal-workspace" id="termWorkspace">
           <!-- Terminal windows will be injected here -->
         </div>

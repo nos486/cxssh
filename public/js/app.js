@@ -190,9 +190,7 @@ function renderProxies() {
   `).join('');
 }
 
-let highestZ = 100;
-function getHighestZ() { return ++highestZ; }
-
+// ── Window Manager (Terminals) ──
 async function connectToServer(serverId, resumeKey = null) {
   const server = servers.find(s => s.id === serverId) || await api('GET', `/api/servers/${serverId}`);
   if (!server) return;
@@ -202,13 +200,6 @@ async function connectToServer(serverId, resumeKey = null) {
   const win = document.createElement('div');
   win.className = 'term-window active';
   win.id = winId;
-  
-  // Stagger positions
-  const offset = (terminals.length * 30) % 300;
-  win.style.left = `${50 + offset}px`;
-  win.style.top = `${50 + offset}px`;
-  win.style.zIndex = getHighestZ();
-  
   win.innerHTML = `
     <div class="term-window-header">
       <div class="term-window-title">
@@ -248,56 +239,6 @@ async function connectToServer(serverId, resumeKey = null) {
   // Initial fit
   setTimeout(() => fit.fit(), 50);
 
-  // Drag logic
-  const header = win.querySelector('.term-window-header');
-  let isDragging = false;
-  let startX, startY, startLeft, startTop;
-  header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.win-btn')) return;
-    isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startLeft = parseInt(win.style.left || 0);
-    startTop = parseInt(win.style.top || 0);
-    focusWindow(winId);
-    e.preventDefault();
-  });
-
-  // Resize logic
-  const resizer = win.querySelector('.resizer');
-  let isResizing = false;
-  let startW, startH;
-  resizer.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startW = win.offsetWidth;
-    startH = win.offsetHeight;
-    focusWindow(winId);
-    e.preventDefault();
-    e.stopPropagation();
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-      win.style.left = \`\${startLeft + (e.clientX - startX)}px\`;
-      win.style.top = \`\${startTop + (e.clientY - startY)}px\`;
-    }
-    if (isResizing) {
-      win.style.width = \`\${Math.max(300, startW + (e.clientX - startX))}px\`;
-      win.style.height = \`\${Math.max(200, startH + (e.clientY - startY))}px\`;
-      fit.fit();
-    }
-  });
-
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-    if (isResizing) {
-      isResizing = false;
-      fit.fit();
-    }
-  });
-
   // Focus handling
   win.addEventListener('mousedown', () => focusWindow(winId));
 
@@ -311,10 +252,7 @@ function focusWindow(id) {
   activeWindowId = id;
   terminals.forEach(t => {
     t.el.classList.toggle('active', t.id === id);
-    if (t.id === id) {
-      t.el.style.zIndex = getHighestZ();
-      t.term.focus();
-    }
+    if (t.id === id) t.term.focus();
   });
 }
 
@@ -378,7 +316,45 @@ document.getElementById('addServerBtn').addEventListener('click', () => {
   openModal('serverModal');
 });
 
-// Removed legacy layout buttons
+document.getElementById('tabAddBtn').addEventListener('click', () => {
+  renderServerPicker();
+  openModal('serverPickerModal');
+});
+
+// Reuse picker logic
+function renderServerPicker(filter = '') {
+  const list = document.getElementById('pickerList');
+  const q = filter.toLowerCase();
+  const filtered = servers.filter(s => s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q));
+  list.innerHTML = filtered.map(s => `
+    <div class="server-picker-item" onclick="startPickerSession('${s.id}')">
+      <div class="color-dot" style="background:${s.label_color}"></div>
+      <div>
+        <div class="server-picker-item-name">${esc(s.name)}</div>
+        <div class="server-picker-item-host">${esc(s.username)}@${esc(s.host)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.startPickerSession = (id) => {
+  closeModal('serverPickerModal');
+  connectToServer(id);
+};
+
+// Layout buttons
+document.getElementById('layoutGridBtn').addEventListener('click', () => {
+  terminals.forEach(t => {
+    t.el.style.flex = '1 1 45%';
+    t.fit.fit();
+  });
+});
+document.getElementById('layoutStackBtn').addEventListener('click', () => {
+  terminals.forEach(t => {
+    t.el.style.flex = '1 1 100%';
+    t.fit.fit();
+  });
+});
 
 // Color picker
 function initColorPicker() {
