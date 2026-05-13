@@ -126,11 +126,12 @@
       position: relative;
     }
     .term-panes.grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-      grid-auto-rows: 1fr;
-      gap: 1px;
-      background: var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-base);
       overflow-y: auto;
     }
     .term-pane {
@@ -143,22 +144,36 @@
       position: relative; inset: auto;
       display: flex !important;
       flex-direction: column;
-      border: 1px solid transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-card);
+      box-shadow: var(--shadow-md);
+      width: 480px;
+      height: 320px;
+      resize: both;
+      overflow: hidden;
+      transition: border-color var(--transition);
+    }
+    .term-panes.grid .term-pane:hover {
+      border-color: var(--border-active);
     }
     .term-panes.grid .term-pane.active {
       border-color: var(--accent);
+      box-shadow: var(--shadow-accent);
     }
     .term-pane.active { display: block; }
 
     .term-pane-header {
       display: none;
-      padding: 4px 8px;
-      background: rgba(255,255,255,0.03);
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
       border-bottom: 1px solid var(--border);
-      font-size: 11px;
-      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
       justify-content: space-between;
       align-items: center;
+      cursor: move; /* Indicate draggable header if we add drag, but good for UX */
     }
     .term-panes.grid .term-pane-header { display: flex; }
 
