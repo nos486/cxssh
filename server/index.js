@@ -5,7 +5,6 @@ const { WebSocketServer } = require('ws');
 const { initDb } = require('./db');
 const { router: authRouter } = require('./auth');
 const serversRouter = require('./routes/servers');
-const sessionsRouter = require('./routes/sessions');
 const keysRouter    = require('./routes/keys');
 const proxyRouter   = require('./routes/proxy');
 const { setupWebSocket } = require('./ws');
@@ -20,7 +19,6 @@ app.use(express.static(path.join(__dirname, '../public')));
 // API
 app.use('/api/auth',     authRouter);
 app.use('/api/servers',  serversRouter);
-app.use('/api/sessions', sessionsRouter);
 app.use('/api/keys',     keysRouter);
 app.use('/api/proxies',  proxyRouter);
 

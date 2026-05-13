@@ -1,4 +1,4 @@
-/* ─── CxSSH SPA Core ─── */
+/* ─── CxSSH SPA Core (v2.5) ─── */
 
 // ── Auth helpers ──
 function getToken() { return localStorage.getItem('cxssh_token'); }
@@ -32,15 +32,13 @@ function showToast(message, type = 'info') {
 
 // ── State ──
 let servers = [];
-let sessions = [];
 let keys = [];
 let proxies = [];
-let terminals = [];
-let activeTabId = null;
+let terminals = []; // Array of { id, serverId, server, term, fit, ws, status, resumeKey }
+let activeWindowId = null;
 let currentView = 'dashboard';
-let editingId = null; 
+let editingId = null;
 let selectedColor = '#6366f1';
-let isGridView = false;
 
 const termTheme = {
   background: '#0d0d0d', foreground: '#e2e8f0', cursor: '#6366f1', cursorAccent: '#0d0d0d',
@@ -51,22 +49,23 @@ const termTheme = {
 };
 
 // ── Persistence ──
-function persistSessions() {
-  const data = terminals.map(t => ({ serverId: t.serverId, resumeKey: t.resumeKey }));
-  sessionStorage.setItem('cxssh_active_terminals', JSON.stringify(data));
+function persistWorkspace() {
+  const state = terminals.map(t => ({
+    serverId: t.serverId,
+    resumeKey: t.resumeKey
+  }));
+  sessionStorage.setItem('cxssh_workspace', JSON.stringify(state));
 }
 
-async function restoreSessions() {
-  const saved = sessionStorage.getItem('cxssh_active_terminals');
-  if (!saved) return;
-  try {
-    const list = JSON.parse(saved);
-    for (const item of list) {
+async function restoreWorkspace() {
+  const saved = sessionStorage.getItem('cxssh_workspace');
+  if (saved) {
+    const state = JSON.parse(saved);
+    // Fetch all servers first to ensure we have data
+    servers = await api('GET', '/api/servers') || [];
+    for (const item of state) {
       await connectToServer(item.serverId, item.resumeKey);
     }
-    if (terminals.length > 0) switchView('terminal');
-  } catch (e) {
-    console.error('Failed to restore sessions', e);
   }
 }
 
@@ -78,18 +77,18 @@ document.querySelectorAll('.nav-item').forEach(item => {
 function switchView(viewId) {
   currentView = viewId;
   document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
-  document.getElementById(`view-${viewId}`).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === viewId));
+  const target = document.getElementById(`view-${viewId}`);
+  if (target) target.classList.add('active');
+  
+  document.querySelectorAll('.nav-item').forEach(i => {
+    i.classList.toggle('active', i.dataset.view === viewId);
+  });
 
   if (viewId === 'dashboard') loadServers();
   if (viewId === 'keys') loadKeys();
   if (viewId === 'proxies') loadProxies();
-  if (viewId === 'sessions') loadSessions();
   if (viewId === 'terminal') {
-    if (terminals.length > 0) {
-      if (!activeTabId) activeTabId = terminals[0].id;
-      activateTab(activeTabId);
-    }
+    setTimeout(() => terminals.forEach(t => t.fit.fit()), 100);
   }
 }
 
@@ -102,151 +101,234 @@ async function loadServers() {
 function renderServers() {
   const grid = document.getElementById('serverGrid');
   const countLabel = document.getElementById('serverCountLabel');
-  countLabel.textContent = `${servers.length} server${servers.length === 1 ? '' : 's'} managed`;
+  countLabel.textContent = `${servers.length} remote systems mapped`;
+
   if (servers.length === 0) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🖥️</div><div class="empty-state-title">No servers yet</div><button class="btn btn-primary btn-sm mt-2" onclick="openAddServer()">Add your first server</button></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-state-icon">🖥️</div>
+      <div class="empty-state-title">No infrastructure added</div>
+      <button class="btn btn-primary btn-sm mt-2" onclick="openAddServer()">Add New Server</button>
+    </div>`;
     return;
   }
+
   grid.innerHTML = servers.map(s => `
     <div class="server-card" style="--card-color:${s.label_color || '#6366f1'}">
-      <div class="server-card-header">
-        <div><div class="server-card-title">${esc(s.name)}</div><div class="server-card-host">${esc(s.username)}@${esc(s.host)}</div></div>
-        <div class="flex gap-2">
-          <button class="btn btn-ghost btn-icon btn-sm" onclick="openEditServer('${s.id}')">✏️</button>
-          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteServer('${s.id}')">🗑</button>
+      <div class="flex justify-between items-center">
+        <div class="server-icon-box">🖥️</div>
+        <div class="flex gap-1">
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="openEditServer('${s.id}')" title="Edit">✏️</button>
+          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteServer('${s.id}')" title="Delete">🗑</button>
         </div>
       </div>
-      <div class="server-card-meta"><span class="badge badge-accent">${s.auth_type}</span>${s.proxy_id ? '<span class="badge badge-warning">🌐 Proxy</span>' : ''}</div>
-      <div class="server-card-footer"><button class="btn btn-primary btn-sm w-full" onclick="connectToServer('${s.id}')">▶ Connect</button></div>
+      <div>
+        <div class="server-card-title" style="font-size: 18px; font-weight: 700; margin-bottom: 2px;">${esc(s.name)}</div>
+        <div class="server-card-host" style="font-family:'JetBrains Mono'; font-size: 13px; color: var(--text-secondary);">${esc(s.username)}@${esc(s.host)}</div>
+      </div>
+      <div class="flex gap-2">
+        <span class="badge badge-accent">${s.auth_type.replace('_',' ')}</span>
+        ${s.proxy_id ? '<span class="badge badge-warning">🌐 Tunneled</span>' : ''}
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-primary w-full" onclick="connectToServer('${s.id}')">Connect Session</button>
+      </div>
     </div>
   `).join('');
 }
-
-function openAddServer() { editingId = null; resetServerForm(); document.getElementById('serverModalTitle').textContent = 'Add Server'; openModal('serverModal'); }
-async function openEditServer(id) {
-  const s = servers.find(x => x.id === id); if (!s) return;
-  editingId = id; resetServerForm(); document.getElementById('serverModalTitle').textContent = 'Edit Server';
-  document.getElementById('sName').value = s.name; document.getElementById('sHost').value = s.host;
-  document.getElementById('sPort').value = s.port; document.getElementById('sUsername').value = s.username;
-  document.getElementById('sAuthType').value = s.auth_type; document.getElementById('sKeyId').value = s.key_id || '';
-  document.getElementById('sProxyId').value = s.proxy_id || '';
-  updateAuthFields(s.auth_type); selectColor(s.label_color); openModal('serverModal');
-}
-function resetServerForm() {
-  document.getElementById('sName').value = ''; document.getElementById('sHost').value = ''; document.getElementById('sPort').value = '22';
-  document.getElementById('sUsername').value = ''; document.getElementById('sPassword').value = ''; document.getElementById('sPrivateKey').value = '';
-  document.getElementById('sAuthType').value = 'password'; updateAuthFields('password'); updateKeySelect(); updateProxySelect(); selectColor('#6366f1');
-}
-function updateAuthFields(type) { document.querySelectorAll('.auth-fields').forEach(f => f.style.display = 'none'); document.getElementById(`auth-${type}`).style.display = 'block'; }
-document.getElementById('sAuthType').addEventListener('change', e => updateAuthFields(e.target.value));
-
-async function updateKeySelect() {
-  keys = await api('GET', '/api/keys') || [];
-  const sel = document.getElementById('sKeyId');
-  sel.innerHTML = keys.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
-}
-async function updateProxySelect() {
-  proxies = await api('GET', '/api/proxies') || [];
-  const sel = document.getElementById('sProxyId');
-  sel.innerHTML = '<option value="">No Proxy (Direct)</option>' + proxies.map(p => `<option value="${p.id}">${esc(p.name)} (${p.type})</option>`).join('');
-}
-
-document.getElementById('saveServerBtn').addEventListener('click', async () => {
-  const payload = {
-    name: document.getElementById('sName').value, host: document.getElementById('sHost').value, port: parseInt(document.getElementById('sPort').value),
-    username: document.getElementById('sUsername').value, auth_type: document.getElementById('sAuthType').value,
-    password: document.getElementById('sPassword').value, private_key: document.getElementById('sPrivateKey').value,
-    key_id: document.getElementById('sKeyId').value || null, proxy_id: document.getElementById('sProxyId').value || null, label_color: selectedColor
-  };
-  const res = editingId ? await api('PUT', `/api/servers/${editingId}`, payload) : await api('POST', '/api/servers', payload);
-  if (res && !res.error) { closeModal('serverModal'); loadServers(); showToast('Server saved'); }
-});
-
-async function deleteServer(id) { if (confirm('Delete this server?')) { await api('DELETE', `/api/servers/${id}`); loadServers(); } }
-
-// ── Proxies ──
-async function loadProxies() { proxies = await api('GET', '/api/proxies') || []; renderProxies(); }
-function renderProxies() {
-  const grid = document.getElementById('proxyGrid');
-  if (proxies.length === 0) { grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🌐</div><div class="empty-state-title">No proxies configured</div><button class="btn btn-primary btn-sm mt-2" onclick="openAddProxy()">Add Proxy</button></div>`; return; }
-  grid.innerHTML = proxies.map(p => `
-    <div class="key-card">
-      <div class="key-card-header"><div class="key-card-name">${esc(p.name)}</div><div class="key-card-type">${esc(p.type)}</div></div>
-      <div class="text-sm text-muted font-mono">${esc(p.host)}:${p.port}</div>
-      <div class="key-card-actions"><button class="btn btn-ghost btn-sm" onclick="openEditProxy('${p.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteProxy('${p.id}')">Delete</button></div>
-    </div>
-  `).join('');
-}
-function openAddProxy() { editingId = null; document.getElementById('pName').value = ''; document.getElementById('pHost').value = ''; document.getElementById('pPort').value = '1080'; document.getElementById('pUsername').value = ''; document.getElementById('pPassword').value = ''; document.getElementById('proxyModalTitle').textContent = 'Add Proxy'; openModal('proxyModal'); }
-function openEditProxy(id) {
-  const p = proxies.find(x => x.id === id); if (!p) return;
-  editingId = id; document.getElementById('pName').value = p.name; document.getElementById('pType').value = p.type;
-  document.getElementById('pHost').value = p.host; document.getElementById('pPort').value = p.port;
-  document.getElementById('pUsername').value = p.username || ''; document.getElementById('pPassword').value = p.password || '';
-  document.getElementById('proxyModalTitle').textContent = 'Edit Proxy'; openModal('proxyModal');
-}
-document.getElementById('saveProxyBtn').addEventListener('click', async () => {
-  const payload = { name: document.getElementById('pName').value, type: document.getElementById('pType').value, host: document.getElementById('pHost').value, port: parseInt(document.getElementById('pPort').value), username: document.getElementById('pUsername').value, password: document.getElementById('pPassword').value };
-  const res = editingId ? await api('PUT', `/api/proxies/${editingId}`, payload) : await api('POST', '/api/proxies', payload);
-  if (res && !res.error) { closeModal('proxyModal'); loadProxies(); }
-});
-async function deleteProxy(id) { if (confirm('Delete this proxy?')) { await api('DELETE', `/api/proxies/${id}`); loadProxies(); } }
 
 // ── SSH Keys ──
-async function loadKeys() { keys = await api('GET', '/api/keys') || []; renderKeys(); }
+async function loadKeys() {
+  keys = await api('GET', '/api/keys') || [];
+  renderKeys();
+}
+
 function renderKeys() {
   const grid = document.getElementById('keysGrid');
+  if (keys.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-title">No identities found</div></div>`;
+    return;
+  }
   grid.innerHTML = keys.map(k => `
     <div class="key-card">
-       <div class="key-card-header"><div class="key-card-name">${esc(k.name)}</div><div class="key-card-type">${esc(k.key_type)}</div></div>
-       <div class="key-fingerprint">${esc(k.fingerprint)}</div>
-       <button class="btn btn-danger btn-sm" onclick="deleteKey('${k.id}')">Delete</button>
+      <div class="key-card-header">
+        <div class="key-card-name">${esc(k.name)}</div>
+        <div class="key-card-type">${esc(k.key_type)}</div>
+      </div>
+      <div class="key-fingerprint">${esc(k.fingerprint)}</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="copyPublicKey('${k.id}', this)">Copy Public</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteKey('${k.id}')">Delete</button>
+      </div>
     </div>
   `).join('');
 }
-async function deleteKey(id) { if (confirm('Delete this SSH key?')) { await api('DELETE', `/api/keys/${id}`); loadKeys(); } }
 
-// ── Terminal Management ──
+// ── Proxies ──
+async function loadProxies() {
+  proxies = await api('GET', '/api/proxies') || [];
+  renderProxies();
+}
+
+function renderProxies() {
+  const grid = document.getElementById('proxyGrid');
+  if (proxies.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-title">No proxies configured</div></div>`;
+    return;
+  }
+  grid.innerHTML = proxies.map(p => `
+    <div class="key-card">
+      <div class="key-card-header">
+        <div class="key-card-name">${esc(p.name)}</div>
+        <div class="key-card-type">${esc(p.type)}</div>
+      </div>
+      <div class="font-mono text-sm text-muted">${esc(p.host)}:${p.port}</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="openEditProxy('${p.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProxy('${p.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+let highestZ = 100;
+function getHighestZ() { return ++highestZ; }
+
 async function connectToServer(serverId, resumeKey = null) {
   const server = servers.find(s => s.id === serverId) || await api('GET', `/api/servers/${serverId}`);
   if (!server) return;
 
-  const tabId = 'tab_' + Math.random().toString(36).substr(2, 9);
-  const pane = document.createElement('div');
-  pane.className = 'term-pane';
-  pane.id = `pane_${tabId}`;
-  pane.innerHTML = `<div class="term-pane-header"><span>${esc(server.name)}</span><button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="closeTab('${tabId}')">✕</button></div><div class="xterm-container" style="flex:1; overflow:hidden"></div>`;
-  document.getElementById('termPanes').appendChild(pane);
+  const winId = 'win_' + Math.random().toString(36).substr(2, 9);
+  
+  const win = document.createElement('div');
+  win.className = 'term-window active';
+  win.id = winId;
+  
+  // Stagger positions
+  const offset = (terminals.length * 30) % 300;
+  win.style.left = `${50 + offset}px`;
+  win.style.top = `${50 + offset}px`;
+  win.style.zIndex = getHighestZ();
+  
+  win.innerHTML = `
+    <div class="term-window-header">
+      <div class="term-window-title">
+        <span class="color-dot" style="background:${server.label_color}"></span>
+        ${esc(server.name)} (${esc(server.host)})
+      </div>
+      <div class="term-window-controls">
+        <button class="win-btn win-close" onclick="closeTerminal('${winId}')"></button>
+      </div>
+    </div>
+    <div class="term-window-body" id="body_${winId}"></div>
+    <div class="resizer"></div>
+  `;
+  
+  document.getElementById('termWorkspace').appendChild(win);
 
-  const container = pane.querySelector('.xterm-container');
-  const term = new Terminal({ theme: termTheme, cursorBlink: true, fontSize: 14, fontFamily: "'JetBrains Mono', monospace" });
+  const term = new Terminal({
+    theme: termTheme,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 13,
+    lineHeight: 1.2,
+    cursorBlink: true,
+    allowProposedApi: true
+  });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon.WebLinksAddon());
-  term.open(container);
   
-  const terminalObj = { id: tabId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey };
+  const body = document.getElementById(`body_${winId}`);
+  term.open(body);
+  
+  const terminalObj = {
+    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey, el: win
+  };
   terminals.push(terminalObj);
-  persistSessions();
   
-  document.getElementById('terminalEmptyState').style.display = 'none';
-  if (currentView !== 'terminal') switchView('terminal');
-  
-  renderTabs();
-  activateTab(tabId);
-  initWebSocket(terminalObj);
-  updateTabBadge();
+  // Initial fit
+  setTimeout(() => fit.fit(), 50);
 
-  // Individual pane resize observer
-  const ro = new ResizeObserver(() => {
-    if (pane.classList.contains('active') || isGridView) {
+  // Drag logic
+  const header = win.querySelector('.term-window-header');
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+  header.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.win-btn')) return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = parseInt(win.style.left || 0);
+    startTop = parseInt(win.style.top || 0);
+    focusWindow(winId);
+    e.preventDefault();
+  });
+
+  // Resize logic
+  const resizer = win.querySelector('.resizer');
+  let isResizing = false;
+  let startW, startH;
+  resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startW = win.offsetWidth;
+    startH = win.offsetHeight;
+    focusWindow(winId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      win.style.left = \`\${startLeft + (e.clientX - startX)}px\`;
+      win.style.top = \`\${startTop + (e.clientY - startY)}px\`;
+    }
+    if (isResizing) {
+      win.style.width = \`\${Math.max(300, startW + (e.clientX - startX))}px\`;
+      win.style.height = \`\${Math.max(200, startH + (e.clientY - startY))}px\`;
       fit.fit();
-      if (terminalObj.ws && terminalObj.ws.readyState === 1) {
-        terminalObj.ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-      }
     }
   });
-  ro.observe(pane);
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    if (isResizing) {
+      isResizing = false;
+      fit.fit();
+    }
+  });
+
+  // Focus handling
+  win.addEventListener('mousedown', () => focusWindow(winId));
+
+  switchView('terminal');
+  initWebSocket(terminalObj);
+  updateTabBadge();
+  persistWorkspace();
+}
+
+function focusWindow(id) {
+  activeWindowId = id;
+  terminals.forEach(t => {
+    t.el.classList.toggle('active', t.id === id);
+    if (t.id === id) {
+      t.el.style.zIndex = getHighestZ();
+      t.term.focus();
+    }
+  });
+}
+
+function closeTerminal(id) {
+  const idx = terminals.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const t = terminals[idx];
+  if (t.ws) t.ws.close();
+  t.term.dispose();
+  t.el.remove();
+  terminals.splice(idx, 1);
+  
+  updateTabBadge();
+  persistWorkspace();
 }
 
 function initWebSocket(t) {
@@ -258,91 +340,22 @@ function initWebSocket(t) {
   t.ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'connected' || m.type === 'resumed') {
-      t.status = 'connected'; t.resumeKey = m.resumeKey; persistSessions(); renderTabs();
+      t.status = 'connected';
+      t.resumeKey = m.resumeKey;
+      persistWorkspace();
     } else if (m.type === 'output') {
       const bytes = new Uint8Array(m.data.length);
       for(let i=0; i<m.data.length; i++) bytes[i] = m.data.charCodeAt(i);
       t.term.write(bytes);
     } else if (m.type === 'error' || m.type === 'disconnect') {
-      t.status = 'error'; t.term.writeln(`\r\n\x1b[31m✖ ${m.data}\x1b[0m`); renderTabs();
+      t.status = 'error';
+      t.term.writeln(`\r\n\x1b[31m✖ ${m.data}\x1b[0m`);
     }
   };
-  t.term.onData(data => { if (t.ws && t.ws.readyState === 1) t.ws.send(JSON.stringify({ type: 'input', data })); });
+  t.term.onData(data => {
+    if (t.ws && t.ws.readyState === 1) t.ws.send(JSON.stringify({ type: 'input', data }));
+  });
 }
-
-function activateTab(tabId) {
-  activeTabId = tabId;
-  const panesContainer = document.getElementById('termPanes');
-  
-  if (isGridView) {
-    panesContainer.classList.add('grid');
-    terminals.forEach(t => {
-      const pane = document.getElementById(`pane_${t.id}`);
-      pane.classList.add('active');
-      pane.classList.toggle('active-highlight', t.id === tabId);
-      setTimeout(() => t.fit.fit(), 50);
-    });
-  } else {
-    panesContainer.classList.remove('grid');
-    terminals.forEach(t => {
-      const pane = document.getElementById(`pane_${t.id}`);
-      const isActive = t.id === tabId;
-      pane.classList.toggle('active', isActive);
-      if (isActive) {
-        setTimeout(() => {
-          t.fit.fit(); t.term.focus();
-          if (t.ws && t.ws.readyState === 1) t.ws.send(JSON.stringify({ type: 'resize', cols: t.term.cols, rows: t.term.rows }));
-        }, 10);
-      }
-    });
-  }
-  renderTabs();
-}
-
-function renderTabs() {
-  const bar = document.getElementById('tabBar');
-  bar.innerHTML = terminals.map(t => `
-    <div class="tab-item ${t.id === activeTabId ? 'active' : ''}" 
-         onclick="activateTab('${t.id}')" 
-         draggable="true" 
-         ondragstart="handleDragStart(event, '${t.id}')"
-         ondragover="handleDragOver(event)"
-         ondrop="handleDrop(event, '${t.id}')">
-      <div class="tab-dot ${t.status}" style="background:${t.status==='connected'?'var(--success)':'var(--warning)'}"></div>
-      <div class="tab-title">${esc(t.server.name)}</div>
-      <div class="tab-close" onclick="event.stopPropagation(); closeTab('${t.id}')">✕</div>
-    </div>
-  `).join('');
-}
-
-function closeTab(id) {
-  const idx = terminals.findIndex(t => t.id === id); if (idx === -1) return;
-  const t = terminals[idx]; if (t.ws) t.ws.close(); t.term.dispose();
-  document.getElementById(`pane_${id}`).remove(); terminals.splice(idx, 1);
-  persistSessions();
-  if (terminals.length === 0) { document.getElementById('terminalEmptyState').style.display = 'flex'; activeTabId = null; }
-  else if (activeTabId === id) activateTab(terminals[Math.min(idx, terminals.length - 1)].id);
-  renderTabs(); updateTabBadge();
-}
-
-// ── Grid View Toggle ──
-document.getElementById('termGridViewBtn').addEventListener('click', () => {
-  isGridView = !isGridView;
-  document.getElementById('termGridViewBtn').textContent = isGridView ? '📖 Tab View' : '🔳 Grid View';
-  activateTab(activeTabId);
-});
-
-// ── Tab Swapping ──
-let draggedTabId = null;
-window.handleDragStart = (e, id) => { draggedTabId = id; e.dataTransfer.setData('text/plain', id); };
-window.handleDragOver = (e) => e.preventDefault();
-window.handleDrop = (e, targetId) => {
-  e.preventDefault(); if (draggedTabId === targetId) return;
-  const fromIdx = terminals.findIndex(t => t.id === draggedTabId);
-  const toIdx = terminals.findIndex(t => t.id === targetId);
-  const [moved] = terminals.splice(fromIdx, 1); terminals.splice(toIdx, 0, moved);
-  renderTabs();
-};
 
 function updateTabBadge() {
   const badge = document.getElementById('tabCountBadge');
@@ -350,48 +363,57 @@ function updateTabBadge() {
   badge.style.display = terminals.length > 0 ? 'block' : 'none';
 }
 
-// ── Sessions ──
-async function loadSessions() { sessions = await api('GET', '/api/sessions') || []; renderSessions(); }
-function renderSessions() {
-  const grid = document.getElementById('sessionGrid');
-  grid.innerHTML = sessions.map(s => `
-    <div class="server-card" onclick="connectToServer('${s.server_id}')">
-      <div class="server-card-header"><div><div class="server-card-title">${esc(s.name)}</div><div class="server-card-host">${esc(s.host)}</div></div></div>
-      <div class="server-card-footer"><button class="btn btn-primary btn-sm w-full">▶ Restore Session</button></div>
-    </div>
-  `).join('');
-}
-
-// ── Misc ──
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// ── Modals & Controls ──
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-function selectColor(c) {
-  selectedColor = c;
-  document.querySelectorAll('#serverColorPicker .color-pill').forEach(p => {
-    p.classList.toggle('selected', p.dataset.color === c);
-  });
-}
-document.getElementById('serverColorPicker').addEventListener('click', e => {
-  if (e.target.classList.contains('color-pill')) selectColor(e.target.dataset.color);
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  clearToken();
+  window.location.href = '/';
 });
 
-// ── Logout ──
-document.getElementById('logoutBtn').addEventListener('click', () => { clearToken(); window.location.href = '/'; });
+document.getElementById('addServerBtn').addEventListener('click', () => {
+  editingId = null;
+  resetServerForm();
+  openModal('serverModal');
+});
 
-// ── Init ──
-(async () => {
-  const user = await api('GET', '/api/auth/me');
-  if (user) {
-    document.getElementById('userNameDisplay').textContent = user.username;
-    document.getElementById('userAvatar').textContent = user.username[0].toUpperCase();
+// Removed legacy layout buttons
+
+// Color picker
+function initColorPicker() {
+  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+  const picker = document.getElementById('serverColorPicker');
+  picker.innerHTML = colors.map(c => `<div class="color-pill" style="background:${c}" data-color="${c}"></div>`).join('');
+  picker.addEventListener('click', (e) => {
+    if (e.target.classList.contains('color-pill')) {
+      selectColor(e.target.dataset.color);
+    }
+  });
+}
+function selectColor(c) {
+  selectedColor = c;
+  document.querySelectorAll('.color-pill').forEach(p => p.classList.toggle('selected', p.dataset.color === c));
+}
+
+// ── Utilities ──
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Boot ──
+async function boot() {
+  const data = await api('GET', '/api/auth/me');
+  if (data) {
+    document.getElementById('userNameDisplay').textContent = data.username;
+    document.getElementById('userAvatar').textContent = data.username[0].toUpperCase();
   }
+  initColorPicker();
   await loadServers();
-  await updateKeySelect();
-  await updateProxySelect();
-  await restoreSessions();
-})();
+  await restoreWorkspace();
+}
 
+boot();
+
+// Handle global resize
 window.addEventListener('resize', () => {
-  terminals.forEach(t => { if (document.getElementById(`pane_${t.id}`).classList.contains('active') || isGridView) t.fit.fit(); });
+  terminals.forEach(t => t.fit.fit());
 });
