@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cxssh:
+    build: .
+    container_name: cxssh
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-changeme-super-secret-jwt-key-2024}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - PORT=3000

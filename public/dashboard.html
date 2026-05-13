@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CxSSH — Dashboard</title>
+  <meta name="description" content="CxSSH Dashboard — Manage SSH servers and saved sessions." />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    /* ─── Layout ─── */
+    .app-layout {
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      grid-template-columns: 260px 1fr;
+      height: 100vh;
+      position: relative; z-index: 1;
+    }
+    /* ─── Topbar ─── */
+    .topbar {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(10,13,20,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #06b6d4);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 18px; font-weight: 700;
+      background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .user-chip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .user-avatar {
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--accent), #06b6d4);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #fff;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      background: rgba(10,13,20,0.6);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-section { padding: 20px 16px 8px; }
+    .sidebar-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 0 4px; margin-bottom: 8px;
+    }
+    .sidebar-sessions { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+    .session-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-md);
+      cursor: pointer; transition: background var(--transition);
+      border: 1px solid transparent;
+    }
+    .session-item:hover { background: var(--bg-hover); border-color: var(--border); }
+    .session-item-info { flex: 1; min-width: 0; }
+    .session-item-name {
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .session-item-host {
+      font-size: 11px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .session-delete {
+      opacity: 0; background: none; border: none;
+      cursor: pointer; color: var(--danger); font-size: 14px;
+      padding: 2px 4px; border-radius: 4px;
+      transition: opacity var(--transition);
+    }
+    .session-item:hover .session-delete { opacity: 1; }
+
+    /* ─── Main content ─── */
+    .main-content {
+      overflow-y: auto; padding: 28px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .page-title { font-size: 22px; font-weight: 700; }
+    .page-subtitle { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* ─── Search bar ─── */
+    .search-bar {
+      position: relative; max-width: 320px;
+    }
+    .search-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); pointer-events: none;
+    }
+    .search-input {
+      padding-left: 40px !important;
+      background: var(--bg-card);
+    }
+
+    /* ─── Server grid ─── */
+    .server-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .server-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+      position: relative; overflow: hidden;
+    }
+    .server-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--card-color, var(--accent));
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    .server-card:hover {
+      border-color: var(--border-active);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+    .server-card-header { display: flex; align-items: flex-start; justify-content: space-between; }
+    .server-card-title { font-size: 16px; font-weight: 600; }
+    .server-card-host {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace; margin-top: 3px;
+    }
+    .server-card-actions { display: flex; gap: 6px; }
+    .server-card-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .server-card-footer { display: flex; gap: 8px; }
+    .btn-connect {
+      flex: 1; justify-content: center;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      color: #fff; font-weight: 600;
+    }
+    .btn-connect:hover {
+      box-shadow: var(--shadow-accent); transform: translateY(-1px);
+    }
+
+    /* ─── Server color bar ─── */
+    .server-card[data-color] { --card-color: attr(data-color); }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+
+  <div class="app-layout">
+    <!-- Topbar -->
+    <header class="topbar" role="banner">
+      <div class="topbar-brand">
+        <div class="brand-icon">⚡</div>
+        <span class="brand-name">CxSSH</span>
+      </div>
+      <div class="topbar-right">
+        <div class="user-chip">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <span id="userNameDisplay">admin</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" title="Logout">
+          🚪 Logout
+        </button>
+      </div>
+    </header>
+
+    <!-- Sidebar: Saved Sessions -->
+    <aside class="sidebar" aria-label="Saved sessions">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Saved Sessions</div>
+      </div>
+      <div class="sidebar-sessions" id="sessionList">
+        <div class="empty-state" style="padding:24px 12px">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-title">No sessions yet</div>
+          <div class="empty-state-desc">Connect to a server and save the session for quick access.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content" role="main">
+      <div class="page-header">
+        <div>
+          <div class="dash-nav" style="margin-bottom: 8px; display: inline-flex;">
+            <button class="dash-nav-btn active" id="navServers">Servers</button>
+            <button class="dash-nav-btn" id="navKeys">SSH Keys</button>
+          </div>
+          <h1 class="page-title" id="pageTitle">SSH Servers</h1>
+          <p class="page-subtitle" id="pageSubtitle">Loading servers…</p>
+        </div>
+        <div class="flex gap-3 items-center">
+          <div class="search-bar" id="searchBarContainer">
+            <span class="search-icon">🔍</span>
+            <input class="form-input search-input" type="search"
+              id="searchInput" placeholder="Search servers…" aria-label="Search servers" />
+          </div>
+          <button class="btn btn-primary" id="addServerBtn">
+            ＋ Add Server
+          </button>
+          <button class="btn btn-primary" id="addKeyBtn" style="display: none;">
+            ＋ Add Key
+          </button>
+        </div>
+      </div>
+
+      <div class="server-grid" id="serverGrid" aria-live="polite">
+        <!-- Server cards rendered by JS -->
+      </div>
+      <div class="keys-grid" id="keysGrid" aria-live="polite" style="display: none;">
+        <!-- Key cards rendered by JS -->
+      </div>
+    </main>
+  </div>
+
+  <!-- ─── Add/Edit Server Modal ─── -->
+  <div class="modal-overlay" id="serverModal" role="dialog" aria-modal="true" aria-labelledby="serverModalTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="serverModalTitle">Add Server</h2>
+        <button class="modal-close" id="serverModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="sName">Server Name *</label>
+          <input class="form-input" type="text" id="sName" placeholder="My Production Server" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 100px;gap:12px">
+          <div class="form-group">
+            <label class="form-label" for="sHost">Hostname / IP *</label>
+            <input class="form-input font-mono" type="text" id="sHost" placeholder="192.168.1.1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sPort">Port</label>
+            <input class="form-input font-mono" type="number" id="sPort" value="22" min="1" max="65535" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sUsername">SSH Username *</label>
+          <input class="form-input font-mono" type="text" id="sUsername" placeholder="root" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sAuthType">Authentication</label>
+          <select class="form-select" id="sAuthType">
+            <option value="password">Password</option>
+            <option value="managed_key">Managed Key (from SSH Keys)</option>
+            <option value="key">Manual Private Key</option>
+          </select>
+        </div>
+        <div class="form-group" id="passwordGroup">
+          <label class="form-label" for="sPassword">Password</label>
+          <input class="form-input" type="password" id="sPassword" placeholder="••••••••" autocomplete="off" />
+        </div>
+        <div class="form-group" id="managedKeyGroup" style="display:none">
+          <label class="form-label" for="sKeyId">Select SSH Key</label>
+          <select class="form-select" id="sKeyId">
+            <option value="">-- Select a key --</option>
+          </select>
+        </div>
+        <div class="form-group" id="keyGroup" style="display:none">
+          <label class="form-label" for="sPrivateKey">Private Key (PEM)</label>
+          <textarea class="form-textarea font-mono" id="sPrivateKey" rows="5"
+            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Label Color</label>
+          <div class="color-picker" id="colorPicker" role="radiogroup" aria-label="Label color">
+            <div class="color-pill selected" data-color="#6366f1" style="background:#6366f1" role="radio" aria-checked="true" tabindex="0"></div>
+            <div class="color-pill" data-color="#06b6d4" style="background:#06b6d4" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#22c55e" style="background:#22c55e" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#f59e0b" style="background:#f59e0b" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#ef4444" style="background:#ef4444" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#a855f7" style="background:#a855f7" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#ec4899" style="background:#ec4899" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="color-pill" data-color="#64748b" style="background:#64748b" role="radio" aria-checked="false" tabindex="0"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sNotes">Notes</label>
+          <textarea class="form-textarea" id="sNotes" placeholder="Optional notes about this server…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="testConnBtn">🔌 Test</button>
+        <button class="btn btn-ghost" id="serverModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="serverModalSave">Save Server</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Save Session Modal ─── -->
+  <div class="modal-overlay" id="saveSessionModal" role="dialog" aria-modal="true" aria-labelledby="saveSessionTitle">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="saveSessionTitle">Save Session</h2>
+        <button class="modal-close" id="saveSessionClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="sessionName">Session Name *</label>
+          <input class="form-input" type="text" id="sessionName" placeholder="e.g. Production Deploy" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sessionNotes">Notes</label>
+          <textarea class="form-textarea" id="sessionNotes" rows="2" placeholder="Optional…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="saveSessionCancel">Cancel</button>
+        <button class="btn btn-primary" id="saveSessionConfirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- ─── Add Key Modal ─── -->
+  <div class="modal-overlay" id="keyModal" role="dialog" aria-modal="true" aria-labelledby="keyModalTitle">
+    <div class="modal" style="max-width:450px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="keyModalTitle">Add SSH Key</h2>
+        <button class="modal-close" id="keyModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="dash-nav" style="margin-bottom: 8px;">
+          <button class="dash-nav-btn active" id="tabKeyGenerate" style="flex:1">Generate New</button>
+          <button class="dash-nav-btn" id="tabKeyImport" style="flex:1">Import Existing</button>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="kName">Key Name *</label>
+          <input class="form-input" type="text" id="kName" placeholder="e.g. My Laptop Key" />
+        </div>
+
+        <!-- Generate View -->
+        <div id="keyGenerateView">
+          <div class="form-group">
+            <label class="form-label" for="kType">Key Type</label>
+            <select class="form-select" id="kType">
+              <option value="ed25519">Ed25519 (Recommended)</option>
+              <option value="rsa">RSA 4096-bit</option>
+            </select>
+          </div>
+          <div class="text-sm text-muted">
+            We will generate a strong keypair for you. You'll be able to copy the public key to put in your server's <code>~/.ssh/authorized_keys</code>.
+          </div>
+        </div>
+
+        <!-- Import View -->
+        <div id="keyImportView" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="kPrivate">Private Key *</label>
+            <textarea class="form-textarea font-mono" id="kPrivate" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="kPublic">Public Key (Optional)</label>
+            <input class="form-input font-mono" type="text" id="kPublic" placeholder="ssh-ed25519 AAAAC3Nz..." />
+            <div class="text-sm text-muted" style="margin-top: 4px;">Leave empty to auto-derive from private key if possible.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="keyModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="keyModalSave">Generate Key</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

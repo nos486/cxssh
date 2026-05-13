@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CxSSH — Terminal</title>
+  <meta name="description" content="CxSSH Terminal — Active SSH session." />
+  <link rel="stylesheet" href="/css/app.css" />
+  <!-- xterm.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <style>
+    .terminal-layout {
+      display: grid;
+      grid-template-rows: 56px 42px 1fr;
+      height: 100vh; overflow: hidden;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── Terminal topbar ─── */
+    .terminal-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px;
+      background: rgba(10,13,20,0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      z-index: 10; flex-shrink: 0;
+    }
+    .terminal-bar-left { display: flex; align-items: center; gap: 14px; }
+    .terminal-back {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--text-secondary);
+      background: none; border: none; cursor: pointer;
+      padding: 6px 10px; border-radius: var(--radius-md);
+      transition: all var(--transition);
+    }
+    .terminal-back:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .terminal-divider { width: 1px; height: 24px; background: var(--border); }
+    .server-info { display: flex; align-items: center; gap: 10px; }
+    .server-name-bar { font-size: 15px; font-weight: 600; }
+    .server-host-bar {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .conn-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text-muted);
+      transition: background var(--transition);
+    }
+    .status-dot.connecting { background: var(--warning); animation: pulse 1.2s infinite; }
+    .status-dot.connected  { background: var(--success); }
+    .status-dot.error      { background: var(--danger); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .terminal-bar-right { display: flex; align-items: center; gap: 10px; }
+
+    /* ─── Terminal container ─── */
+    .terminal-wrapper {
+      flex: 1; overflow: hidden;
+      display: flex; flex-direction: column;
+      background: #0d0d0d;
+      position: relative;
+    }
+    #terminalContainer {
+      flex: 1;
+      padding: 8px;
+      overflow: hidden;
+    }
+    /* xterm overrides */
+    .xterm { height: 100% !important; }
+    .xterm-viewport { border-radius: 0; }
+
+    /* ─── Connecting overlay ─── */
+    .connect-overlay {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      background: rgba(13,13,13,0.95);
+      transition: opacity 0.4s ease;
+    }
+    .connect-overlay.hidden { opacity: 0; pointer-events: none; }
+    .connect-overlay-icon { font-size: 48px; animation: bounce 1.5s ease infinite; }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    .connect-overlay-text { font-size: 16px; color: var(--text-secondary); }
+    .connect-overlay-host { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 14px; }
+
+    /* ─── Save session prompt ─── */
+    .save-prompt {
+      display: none;
+      position: absolute; bottom: 20px; right: 20px; z-index: 10;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.3s ease;
+    }
+    .save-prompt.show { display: flex; align-items: center; gap: 14px; }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } }
+    .save-prompt-text { font-size: 13px; color: var(--text-secondary); }
+    .save-prompt-title { font-weight: 600; color: var(--text-primary); font-size: 14px; }
+  </style>
+</head>
+<body style="overflow:hidden">
+  <div class="bg-mesh" style="opacity:0.5"></div>
+
+  <div class="terminal-layout">
+    <!-- Terminal Topbar -->
+    <header class="terminal-bar" role="banner">
+      <div class="terminal-bar-left">
+        <button class="terminal-back" id="backBtn" aria-label="Back to dashboard">
+          ← Dashboard
+        </button>
+        <div class="terminal-divider"></div>
+        <div class="server-info">
+          <div class="color-dot" id="serverDot" style="background: var(--accent)"></div>
+          <div>
+            <div class="server-name-bar" id="serverNameBar">Loading…</div>
+            <div class="server-host-bar" id="serverHostBar"></div>
+          </div>
+        </div>
+        <div class="conn-status">
+          <div class="status-dot connecting" id="statusDot"></div>
+          <span id="statusText">Connecting…</span>
+        </div>
+      </div>
+      <div class="terminal-bar-right">
+        <button class="btn btn-ghost btn-sm" id="saveSessionBtn" title="Save this session">
+          💾 Save Session
+        </button>
+        <button class="btn btn-ghost btn-sm" id="clearBtn" title="Clear terminal">
+          🗑 Clear
+        </button>
+        <button class="btn btn-danger btn-sm" id="disconnectBtn" title="Disconnect">
+          ✕ Disconnect
+        </button>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-add" id="tabAddBtn" title="New Tab">＋</button>
+    </div>
+
+    <!-- Terminal -->
+    <div class="terminal-wrapper" id="terminalWrapper">
+      <div class="connect-overlay" id="connectOverlay">
+        <div class="connect-overlay-icon">🔐</div>
+        <div class="connect-overlay-text">Establishing SSH connection to</div>
+        <div class="connect-overlay-host" id="overlayHost">…</div>
+        <div class="spinner"></div>
+      </div>
+
+      <div class="term-panes" id="termPanes" role="main" aria-label="SSH Terminals"></div>
+
+      <!-- Save session prompt -->
+      <div class="save-prompt" id="savePrompt">
+        <div>
+          <div class="save-prompt-title">Session connected!</div>
+          <div class="save-prompt-text">Save this for quick access?</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="savePromptYes">Save</button>
+        <button class="btn btn-ghost btn-sm" id="savePromptNo">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Session Modal -->
+  <div class="modal-overlay" id="saveSessionModal" role="dialog" aria-modal="true" aria-labelledby="saveSessionModalTitle">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="saveSessionModalTitle">Save Session</h2>
+        <button class="modal-close" id="saveModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="sessionNameInput">Session Name *</label>
+          <input class="form-input" type="text" id="sessionNameInput" placeholder="e.g. Production Server" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sessionNotesInput">Notes</label>
+          <textarea class="form-textarea" id="sessionNotesInput" rows="2" placeholder="Optional…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="saveModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="saveModalConfirm">Save Session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Tab Server Picker Modal -->
+  <div class="modal-overlay" id="serverPickerModal" role="dialog" aria-modal="true" aria-labelledby="serverPickerTitle">
+    <div class="modal" style="max-width:450px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="serverPickerTitle">Open New Connection</h2>
+        <button class="modal-close" id="pickerModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <input class="form-input" type="search" id="pickerSearch" placeholder="Search servers…" style="margin-bottom:12px" />
+        <div class="server-picker-list" id="pickerList">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="/js/terminal.js"></script>
+</body>
+</html>

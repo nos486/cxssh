@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CxSSH — Login</title>
+  <meta name="description" content="CxSSH — Secure web-based SSH client. Login to manage your servers." />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .login-page {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
+    }
+    .login-card {
+      width: 100%; max-width: 420px;
+      padding: 48px 40px;
+      position: relative;
+    }
+    .login-logo {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px; margin-bottom: 36px;
+    }
+    .login-logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, var(--accent), #06b6d4);
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      box-shadow: var(--shadow-accent);
+    }
+    .login-logo-text { display: flex; flex-direction: column; }
+    .login-logo-title {
+      font-size: 26px; font-weight: 700; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .login-logo-sub {
+      font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .login-title {
+      font-size: 22px; font-weight: 600; text-align: center;
+      margin-bottom: 6px;
+    }
+    .login-sub {
+      text-align: center; color: var(--text-secondary);
+      font-size: 14px; margin-bottom: 32px;
+    }
+    .login-form { display: flex; flex-direction: column; gap: 18px; }
+    .input-wrapper { position: relative; }
+    .input-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 16px; pointer-events: none;
+    }
+    .input-with-icon { padding-left: 42px !important; }
+    .btn-login {
+      width: 100%; padding: 13px;
+      font-size: 15px; font-weight: 600;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+    }
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(99,102,241,0.5);
+    }
+    .login-error {
+      display: none;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      font-size: 14px; color: var(--danger);
+      text-align: center;
+    }
+    .login-footer {
+      margin-top: 32px; text-align: center;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .login-footer a { color: var(--accent); text-decoration: none; }
+    /* Particle dots */
+    .grid-dots {
+      position: fixed; inset: 0; z-index: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-dots"></div>
+  <div class="bg-mesh"></div>
+
+  <main class="login-page" role="main">
+    <div class="glass login-card">
+      <div class="login-logo">
+        <div class="login-logo-icon">⚡</div>
+        <div class="login-logo-text">
+          <span class="login-logo-title">CxSSH</span>
+          <span class="login-logo-sub">Web SSH Manager</span>
+        </div>
+      </div>
+
+      <h1 class="login-title">Welcome back</h1>
+      <p class="login-sub">Sign in to access your servers</p>
+
+      <form class="login-form" id="loginForm" novalidate>
+        <div id="loginError" class="login-error" role="alert"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input
+              class="form-input input-with-icon"
+              type="text"
+              id="username"
+              name="username"
+              autocomplete="username"
+              placeholder="admin"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input
+              class="form-input input-with-icon"
+              type="password"
+              id="password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-login" id="loginBtn">
+          Sign in
+        </button>
+      </form>
+
+      <div class="login-footer">
+        CxSSH &mdash; Self-hosted &amp; open source
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="/js/login.js"></script>
+</body>
+</html>
