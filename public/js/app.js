@@ -49,6 +49,7 @@ const termTheme = {
 };
 
 // ── Persistence ──
+let persistTimer = null;
 function persistWorkspace() {
   const ws = document.getElementById('termWorkspace');
   const layout = ws.classList.contains('layout-grid') ? 'grid' : 'tabs';
@@ -61,13 +62,39 @@ function persistWorkspace() {
     }))
   };
   sessionStorage.setItem('cxssh_workspace', JSON.stringify(state));
+
+  // Debounce API updates to prevent flooding the server on resize or session changes
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    try {
+      await api('POST', '/api/servers/workspace', state);
+    } catch (e) {
+      console.warn('Server workspace save failed', e);
+    }
+  }, 1000);
 }
 
 async function restoreWorkspace() {
-  const saved = sessionStorage.getItem('cxssh_workspace');
-  if (saved) {
+  let state = null;
+  try {
+    // Attempt to pull workspace state from the server first for cross-browser sync
+    const serverSaved = await api('GET', '/api/servers/workspace');
+    if (serverSaved) {
+      state = serverSaved;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch server workspace, falling back to local storage', e);
+  }
+
+  if (!state) {
+    const saved = sessionStorage.getItem('cxssh_workspace');
+    if (saved) {
+      try { state = JSON.parse(saved); } catch {}
+    }
+  }
+
+  if (state) {
     try {
-      const state = JSON.parse(saved);
       // Force grid mode on restore as requested
       setLayout('grid');
 

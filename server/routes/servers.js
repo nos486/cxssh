@@ -174,4 +174,18 @@ router.post('/:id/test', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/servers/workspace
+router.get('/workspace', requireAuth, (req, res) => {
+  const { getWorkspace } = require('../db');
+  const ws = getWorkspace();
+  res.json(ws ? JSON.parse(ws) : null);
+});
+
+// POST /api/servers/workspace
+router.post('/workspace', requireAuth, (req, res) => {
+  const { saveWorkspace } = require('../db');
+  saveWorkspace(JSON.stringify(req.body));
+  res.json({ success: true });
+});
+
 module.exports = router;
