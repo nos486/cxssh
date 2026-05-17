@@ -369,6 +369,14 @@ function initWebSocket(t) {
   t.term.onData(data => {
     if (t.ws && t.ws.readyState === 1) t.ws.send(JSON.stringify({ type: 'input', data }));
   });
+
+  const pingInterval = setInterval(() => {
+    if (t.ws && t.ws.readyState === 1) {
+      t.ws.send(JSON.stringify({ type: 'ping' }));
+    } else {
+      clearInterval(pingInterval);
+    }
+  }, 15000);
 }
 
 function updateTabBadge() {

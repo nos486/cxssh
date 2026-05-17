@@ -182,3 +182,14 @@ function setupWebSocket(wss) {
 }
 
 module.exports = { setupWebSocket };
+
+// Heartbeat to prevent WebSocket idle timeouts (reverse proxies, firewalls, load balancers)
+setInterval(() => {
+  for (const entry of registry.values()) {
+    if (entry.alive) {
+      try {
+        entry.broadcast({ type: 'ping' });
+      } catch {}
+    }
+  }
+}, 15000);
