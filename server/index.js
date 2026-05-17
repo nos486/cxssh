@@ -34,6 +34,6 @@ const server = http.createServer(app);
 const wss    = new WebSocketServer({ server, path: '/ws/ssh' });
 setupWebSocket(wss);
 
-server.listen(PORT, () => {
-  console.log(`[CxSSH] Server running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[CxSSH] Server running on http://0.0.0.0:${PORT}`);
 });
