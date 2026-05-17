@@ -49,7 +49,6 @@ const termTheme = {
 };
 
 // ── Persistence ──
-let persistTimer = null;
 function persistWorkspace() {
   const ws = document.getElementById('termWorkspace');
   const layout = ws.classList.contains('layout-grid') ? 'grid' : 'tabs';
@@ -61,60 +60,50 @@ function persistWorkspace() {
       resumeKey: t.resumeKey
     }))
   };
-  sessionStorage.setItem('cxssh_workspace', JSON.stringify(state));
-
-  // Debounce API updates to prevent flooding the server on resize or session changes
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    try {
-      await api('POST', '/api/servers/workspace', state);
-    } catch (e) {
-      console.warn('Server workspace save failed', e);
-    }
-  }, 1000);
+  localStorage.setItem('cxssh_workspace', JSON.stringify(state));
 }
 
 async function restoreWorkspace() {
-  let state = null;
-  try {
-    // Attempt to pull workspace state from the server first for cross-browser sync
-    const serverSaved = await api('GET', '/api/servers/workspace');
-    if (serverSaved) {
-      state = serverSaved;
-    }
-  } catch (e) {
-    console.warn('Failed to fetch server workspace, falling back to local storage', e);
-  }
-
-  if (!state) {
-    const saved = sessionStorage.getItem('cxssh_workspace');
-    if (saved) {
-      try { state = JSON.parse(saved); } catch {}
-    }
-  }
-
-  if (state) {
+  let items = [];
+  const saved = localStorage.getItem('cxssh_workspace');
+  if (saved) {
     try {
-      // Force grid mode on restore as requested
+      const state = JSON.parse(saved);
+      if (state.items) items = state.items;
       setLayout('grid');
-
-      // Fetch all servers first to ensure we have data
-      servers = await api('GET', '/api/servers') || [];
-      
-      if (state.items && state.items.length > 0) {
-        for (let i = 0; i < state.items.length; i++) {
-          const item = state.items[i];
-          // Always focus the first one on refresh
-          await connectToServer(item.serverId, item.resumeKey, i === 0);
-          await new Promise(r => setTimeout(r, 50));
-        }
-      }
     } catch (e) {
-      console.error('Failed to restore workspace', e);
+      console.error('Failed to parse local workspace', e);
       setLayout('grid');
     }
   } else {
     setLayout('grid');
+  }
+
+  // Fetch all servers first to ensure we have data
+  servers = await api('GET', '/api/servers') || [];
+
+  // Fetch globally active sessions from the backend (session roaming)
+  try {
+    const active = await api('GET', '/api/active-sessions');
+    if (active && active.length > 0) {
+      const existingKeys = new Set(items.map(i => i.resumeKey));
+      for (const a of active) {
+        if (!existingKeys.has(a.resumeKey)) {
+          items.push(a);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to fetch active sessions from server', e);
+  }
+
+  if (items.length > 0) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      // Always focus the first one on refresh
+      await connectToServer(item.serverId, item.resumeKey, i === 0);
+      await new Promise(r => setTimeout(r, 50));
+    }
   }
 }
 

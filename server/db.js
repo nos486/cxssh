@@ -71,11 +71,6 @@ function initDb() {
       last_used TEXT,
       FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
     );
-
-    CREATE TABLE IF NOT EXISTS workspace (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      state TEXT NOT NULL
-    );
   `);
 
   // Non-destructive migrations for existing databases
@@ -148,20 +143,10 @@ function createSession(s) { getDb().prepare('INSERT INTO sessions (id,name,serve
 function deleteSession(id) { getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id); }
 function touchSession(id) { getDb().prepare("UPDATE sessions SET last_used = datetime('now') WHERE id = ?").run(id); }
 
-// Workspace Persistence
-function saveWorkspace(state) {
-  getDb().prepare('INSERT OR REPLACE INTO workspace (id, state) VALUES (1, ?)').run(state);
-}
-function getWorkspace() {
-  const row = getDb().prepare('SELECT state FROM workspace WHERE id = 1').get();
-  return row ? row.state : null;
-}
-
 module.exports = {
   initDb, getUserByUsername,
   getKeys, getKeyById, createKey, deleteKey,
   getProxies, getProxyById, createProxy, updateProxy, deleteProxy,
   getServers, getServerById, createServer, updateServer, deleteServer, touchServer,
   getSessions, getSessionById, createSession, deleteSession, touchSession,
-  saveWorkspace, getWorkspace,
 };

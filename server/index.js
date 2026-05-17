@@ -3,11 +3,11 @@ const http = require('http');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { initDb } = require('./db');
-const { router: authRouter } = require('./auth');
+const { router: authRouter, requireAuth } = require('./auth');
 const serversRouter = require('./routes/servers');
 const keysRouter    = require('./routes/keys');
 const proxyRouter   = require('./routes/proxy');
-const { setupWebSocket } = require('./ws');
+const { setupWebSocket, getActiveSessions } = require('./ws');
 
 const PORT = process.env.PORT || 3000;
 initDb();
@@ -21,6 +21,7 @@ app.use('/api/auth',     authRouter);
 app.use('/api/servers',  serversRouter);
 app.use('/api/keys',     keysRouter);
 app.use('/api/proxies',  proxyRouter);
+app.get('/api/active-sessions', requireAuth, (req, res) => res.json(getActiveSessions()));
 
 // Routes
 app.get('/app',       (req, res) => res.sendFile(path.join(__dirname, '../public/app.html')));

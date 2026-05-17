@@ -181,7 +181,17 @@ function setupWebSocket(wss) {
   });
 }
 
-module.exports = { setupWebSocket };
+function getActiveSessions() {
+  const active = [];
+  for (const [resumeKey, entry] of registry.entries()) {
+    if (entry.alive) {
+      active.push({ resumeKey, serverId: entry.serverId });
+    }
+  }
+  return active;
+}
+
+module.exports = { setupWebSocket, getActiveSessions };
 
 // Heartbeat to prevent WebSocket idle timeouts (reverse proxies, firewalls, load balancers)
 setInterval(() => {
