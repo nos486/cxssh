@@ -6,39 +6,37 @@ const { getKeys, getKeyById, createKey, deleteKey } = require('../db');
 
 const router = express.Router();
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function uint32BE(n) {
-  const b = Buffer.alloc(4);
-  b.writeUInt32BE(n);
-  return b;
-}
-
-/** Convert ed25519 SPKI DER buffer → OpenSSH authorized_keys line */
-function ed25519SpkiToSsh(spkiDer, comment = 'cxssh') {
-  // SPKI for ed25519: 12-byte header + 32-byte raw public key
-  const rawPub = spkiDer.slice(-32);
-  const keyType = 'ssh-ed25519';
-  const blob = Buffer.concat([
-    uint32BE(keyType.length), Buffer.from(keyType),
-    uint32BE(rawPub.length), rawPub,
-  ]);
-  return `ssh-ed25519 ${blob.toString('base64')} ${comment}`;
-}
+const ssh2 = require('ssh2');
 
 /** Try to derive SSH public key string from a private-key PEM */
 function privateKeyToSshPublic(pemStr, comment = 'cxssh') {
   try {
-    const privKey = crypto.createPrivateKey(pemStr);
-    const pubKey  = crypto.createPublicKey(privKey);
-    const keyType = privKey.asymmetricKeyType; // 'ed25519', 'rsa', 'ec', …
-    if (keyType === 'ed25519') {
-      const spkiDer = pubKey.export({ type: 'spki', format: 'der' });
-      return ed25519SpkiToSsh(spkiDer, comment);
+    const parsed = ssh2.utils.parseKey(pemStr);
+    if (!parsed) return null;
+    const key = Array.isArray(parsed) ? parsed[0] : parsed;
+
+    // Use ssh2's built-in public key derivation if available
+    let pubBlob;
+    if (typeof key.getPublicSSH === 'function') {
+      pubBlob = key.getPublicSSH();
+    } else if (key.public && typeof key.public.getPublicSSH === 'function') {
+      pubBlob = key.public.getPublicSSH();
     }
-    // For RSA / EC just return the SPKI PEM — user can copy it
-    return pubKey.export({ type: 'spki', format: 'pem' });
-  } catch {
+
+    if (pubBlob) {
+      return `${key.type} ${pubBlob.toString('base64')} ${comment}`;
+    }
+
+    // Fallback: try to use crypto if ssh2 failed to give us a blob but managed to parse
+    try {
+      const privKey = crypto.createPrivateKey(pemStr);
+      const pubKey  = crypto.createPublicKey(privKey);
+      return pubKey.export({ type: 'spki', format: 'pem' });
+    } catch {
+      return null;
+    }
+  } catch (e) {
+    console.error('[Keys] Derive error:', e);
     return null;
   }
 }
@@ -47,6 +45,7 @@ function privateKeyToSshPublic(pemStr, comment = 'cxssh') {
 function sshFingerprint(sshPublicLine) {
   try {
     const parts = sshPublicLine.trim().split(' ');
+    if (parts.length < 2) return null;
     const blob = Buffer.from(parts[1], 'base64');
     const hash = crypto.createHash('sha256').update(blob).digest('base64').replace(/=+$/, '');
     return `SHA256:${hash}`;
@@ -108,7 +107,9 @@ router.post('/generate', requireAuth, (req, res) => {
   });
 
   res.status(201).json({
-    id: saved.id, name: saved.name,
+    success: true,
+    id: saved.id,
+    name: saved.name,
     key_type: saved.key_type,
     public_key: saved.public_key,
     fingerprint: saved.fingerprint,
@@ -124,8 +125,10 @@ router.post('/import', requireAuth, (req, res) => {
   // Detect key type
   let keyType = 'unknown';
   try {
-    const k = crypto.createPrivateKey(private_key);
-    keyType = k.asymmetricKeyType || 'unknown';
+    const parsed = ssh2.utils.parseKey(private_key);
+    if (!parsed) throw new Error('Could not parse key');
+    const k = Array.isArray(parsed) ? parsed[0] : parsed;
+    keyType = k.type || 'unknown';
   } catch (e) {
     return res.status(400).json({ error: `Invalid private key: ${e.message}` });
   }
@@ -142,7 +145,9 @@ router.post('/import', requireAuth, (req, res) => {
   });
 
   res.status(201).json({
-    id: saved.id, name: saved.name,
+    success: true,
+    id: saved.id,
+    name: saved.name,
     key_type: saved.key_type,
     public_key: saved.public_key,
     fingerprint: saved.fingerprint,

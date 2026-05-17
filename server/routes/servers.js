@@ -68,7 +68,7 @@ router.post('/', requireAuth, (req, res) => {
     label_color: label_color || '#6366f1',
     notes: notes || null,
   });
-  res.status(201).json(sanitize(s));
+  res.status(201).json({ success: true, ...sanitize(s) });
 });
 
 // PUT /api/servers/:id
@@ -77,14 +77,58 @@ router.put('/:id', requireAuth, (req, res) => {
   const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','notes'];
   const fields = {};
   for (const k of allowed) if (req.body[k] !== undefined) fields[k] = req.body[k];
-  res.json(sanitize(updateServer(req.params.id, fields)));
+  const s = updateServer(req.params.id, fields);
+  res.json({ success: true, ...sanitize(s) });
 });
 
 // DELETE /api/servers/:id
 router.delete('/:id', requireAuth, (req, res) => {
   if (!getServerById(req.params.id)) return res.status(404).json({ error: 'Not found' });
   deleteServer(req.params.id);
-  res.json({ ok: true });
+  res.json({ success: true, ok: true });
+});
+
+// POST /api/servers/test (for unsaved data)
+router.post('/test', requireAuth, async (req, res) => {
+  const server = req.body;
+  if (!server.host || !server.username) return res.status(400).json({ error: 'host and username required' });
+
+  const conn = new Client();
+  let done = false;
+  const finish = (ok, msg, status = 200) => {
+    if (done) return; done = true;
+    clearTimeout(timer);
+    conn.end();
+    res.status(status).json({ success: ok, ok, ...(ok ? { message: msg } : { error: msg }) });
+  };
+  const timer = setTimeout(() => finish(false, 'Connection timed out', 408), 15000);
+
+  try {
+    const opts = {
+      host: server.host, port: parseInt(server.port) || 22, username: server.username, readyTimeout: 12000,
+    };
+    if (server.auth_type === 'managed_key' && server.key_id) {
+      const key = getKeyById(server.key_id);
+      if (key) opts.privateKey = key.private_key;
+    } else if (server.auth_type === 'key' && server.private_key) {
+      opts.privateKey = server.private_key;
+    } else {
+      opts.password = server.password;
+      opts.tryKeyboard = true;
+    }
+
+    if (server.proxy_id) {
+      const proxy = getProxyById(server.proxy_id);
+      if (proxy) opts.sock = await createProxiedSocket(server, proxy);
+    }
+
+    conn.on('ready', () => finish(true, 'Connection successful'))
+        .on('error', err => finish(false, err.message, 400))
+        .on('keyboard-interactive', (_n,_i,_l,_p, f) => f([server.password||'']))
+        .connect(opts);
+  } catch (e) {
+    finish(false, `Error: ${e.message}`, 400);
+  }
 });
 
 // POST /api/servers/:id/test

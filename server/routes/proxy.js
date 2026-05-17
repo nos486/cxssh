@@ -11,14 +11,15 @@ router.post('/', requireAuth, (req, res) => {
   const { name, type, host, port, username, password } = req.body;
   if (!name || !host || !port) return res.status(400).json({ error: 'name, host, port required' });
   const p = createProxy({ id: uuidv4(), name, type: type || 'socks5', host, port: parseInt(port), username: username || null, password: password || null });
-  res.status(201).json(p);
+  res.status(201).json({ success: true, ...p });
 });
 
 router.put('/:id', requireAuth, (req, res) => {
   if (!getProxyById(req.params.id)) return res.status(404).json({ error: 'Not found' });
   const fields = {};
   ['name','type','host','port','username','password'].forEach(k => { if (req.body[k] !== undefined) fields[k] = req.body[k]; });
-  res.json(updateProxy(req.params.id, fields));
+  const p = updateProxy(req.params.id, fields);
+  res.json({ success: true, ...p });
 });
 
 router.delete('/:id', requireAuth, (req, res) => {

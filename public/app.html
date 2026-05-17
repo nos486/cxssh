@@ -5,119 +5,188 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CxSSH — Web SSH Manager</title>
   <link rel="stylesheet" href="/css/app.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <link rel="stylesheet" href="/css/xterm.css" />
+  <script src="/js/xterm.js"></script>
+  <script src="/js/xterm-addon-fit.js"></script>
+  <script src="/js/xterm-addon-web-links.js"></script>
 </head>
 <body>
   <div class="bg-mesh"></div>
 
   <div class="spa-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
+    <!-- Sidebar (collapsed by default) -->
+    <aside class="sidebar collapsed" id="sidebar">
       <div class="sidebar-header">
-        <div class="brand-icon">⚡</div>
-        <span class="brand-name" style="font-size: 20px; font-weight: 700;">CxSSH</span>
-      </div>
-      <nav class="sidebar-nav">
-        <div class="sidebar-label">Connection</div>
-        <div class="nav-item active" data-view="dashboard">🖥️ Servers</div>
-        <div class="nav-item" data-view="terminal">⌨️ Workspaces <span id="tabCountBadge" class="badge badge-accent" style="margin-left: auto; display:none;">0</span></div>
-        
-        <div class="sidebar-label" style="margin-top: 24px;">Security</div>
-        <div class="nav-item" data-view="keys">🔑 SSH Keys</div>
-        <div class="nav-item" data-view="proxies">🌐 Proxies</div>
-      </nav>
-      <div class="sidebar-footer">
-        <div class="user-chip" style="margin-bottom: 12px; width: 100%;">
-          <div class="user-avatar" id="userAvatar">A</div>
-          <span id="userNameDisplay">admin</span>
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         </div>
-        <button class="btn btn-ghost btn-sm w-full" id="logoutBtn">🚪 Logout</button>
+        <span class="brand-name">CxSSH</span>
+        <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+          <svg class="toggle-icon-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          <svg class="toggle-icon-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Connection</div>
+
+        <div class="nav-item active" data-view="dashboard" title="Servers">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </span>
+          <span class="nav-text">Servers</span>
+        </div>
+
+        <div class="nav-item" data-view="terminal" title="Workspaces">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </span>
+          <span class="nav-text">Workspaces</span>
+          <span id="tabCountBadge" class="badge badge-accent nav-badge" style="display:none;">0</span>
+        </div>
+
+        <div class="sidebar-section-label" style="margin-top: 8px;">Security</div>
+
+        <div class="nav-item" data-view="keys" title="SSH Keys">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          </span>
+          <span class="nav-text">SSH Keys</span>
+        </div>
+
+        <div class="nav-item" data-view="proxies" title="Proxies">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </span>
+          <span class="nav-text">Proxies</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <div class="user-info">
+            <span class="user-name" id="userNameDisplay">admin</span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm w-full logout-btn" id="logoutBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span class="nav-text">Logout</span>
+        </button>
       </div>
     </aside>
 
     <!-- Main Content -->
     <main class="main-area">
-      <!-- Servers View -->
+
+      <!-- ── Servers View ── -->
       <section id="view-dashboard" class="view-container active">
         <div class="page-header">
           <div>
             <h1 class="page-title">Remote Servers</h1>
             <p class="page-subtitle" id="serverCountLabel">Connect and manage your infrastructure</p>
           </div>
-          <div class="flex gap-3">
-            <input class="form-input" type="search" id="serverSearch" placeholder="Filter servers..." style="width: 240px;" />
-            <button class="btn btn-primary" id="addServerBtn">＋ New Server</button>
-          </div>
-        </div>
-        <div class="server-grid mt-4" id="serverGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px;"></div>
-      </section>
-
-      <!-- Workspace View (Window Manager) -->
-      <section id="view-terminal" class="view-container terminal-view" style="display: flex; flex-direction: column; padding: 0;">
-        <div class="terminal-header" style="background: rgba(10,13,20,0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-bottom: 1px solid var(--border);">
-          <div class="flex items-center gap-3">
-            <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Active Sessions</span>
-            <button class="btn btn-ghost btn-sm" id="tabAddBtn">＋ New Session</button>
-          </div>
-          <div style="flex:1"></div>
           <div class="flex gap-2">
-            <button class="btn btn-ghost btn-sm" id="layoutGridBtn" title="Tile Grid">⊞</button>
-            <button class="btn btn-ghost btn-sm" id="layoutStackBtn" title="Stack Vertical">≡</button>
+            <div class="search-wrap">
+              <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="form-input search-input" type="search" id="serverSearch" placeholder="Filter servers…" />
+            </div>
+            <button class="btn btn-primary" id="addServerBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Server
+            </button>
           </div>
         </div>
-        <div class="terminal-workspace" id="termWorkspace">
-          <!-- Terminal windows will be injected here -->
+        <div class="server-grid" id="serverGrid"></div>
+      </section>
+
+      <!-- ── Workspace View ── -->
+      <section id="view-terminal" class="view-container terminal-view">
+        <div class="terminal-header">
+          <div class="term-header-left">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="term-header-label">Sessions</span>
+          </div>
+          <div class="terminal-tabs" id="termTabs"></div>
+          <div class="term-header-actions">
+            <button class="btn btn-ghost btn-sm btn-icon" id="tabAddBtn" title="New Session">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <div class="layout-divider"></div>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn active" id="layoutGridBtn" title="Tile Grid">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </button>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn" id="layoutStackBtn" title="Tab View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="terminal-workspace layout-grid" id="termWorkspace">
+          <!-- Terminal windows injected here -->
         </div>
       </section>
 
-      <!-- SSH Keys View -->
+      <!-- ── SSH Keys View ── -->
       <section id="view-keys" class="view-container">
         <div class="page-header">
-          <h1 class="page-title">SSH Identities</h1>
-          <button class="btn btn-primary" id="addKeyBtn">＋ New Identity</button>
+          <div>
+            <h1 class="page-title">SSH Identities</h1>
+            <p class="page-subtitle">Manage your cryptographic keys</p>
+          </div>
+          <button class="btn btn-primary" id="addKeyBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Identity
+          </button>
         </div>
         <div class="keys-grid mt-4" id="keysGrid"></div>
       </section>
 
-      <!-- Proxies View -->
+      <!-- ── Proxies View ── -->
       <section id="view-proxies" class="view-container">
         <div class="page-header">
-          <h1 class="page-title">Network Proxies</h1>
-          <button class="btn btn-primary" id="addProxyBtn">＋ New Proxy</button>
+          <div>
+            <h1 class="page-title">Network Proxies</h1>
+            <p class="page-subtitle">Configure SOCKS5 and HTTP tunnels</p>
+          </div>
+          <button class="btn btn-primary" id="addProxyBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Proxy
+          </button>
         </div>
         <div class="data-grid mt-4" id="proxyGrid"></div>
       </section>
+
     </main>
   </div>
 
-  <!-- Modals -->
+  <!-- ══ Modals ══ -->
+
   <!-- Server Modal -->
   <div class="modal-overlay" id="serverModal">
     <div class="modal">
       <div class="modal-header">
         <h2 class="modal-title" id="serverModalTitle">Server Profile</h2>
-        <button class="modal-close" onclick="closeModal('serverModal')">✕</button>
+        <button class="modal-close" onclick="closeModal('serverModal')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Display Name *</label>
+          <label class="form-label">Display Name <span class="required">*</span></label>
           <input class="form-input" type="text" id="sName" placeholder="Production Web 01" />
         </div>
         <div class="flex gap-3">
           <div class="form-group flex-1">
-            <label class="form-label">Hostname / IP *</label>
+            <label class="form-label">Hostname / IP <span class="required">*</span></label>
             <input class="form-input font-mono" type="text" id="sHost" placeholder="10.0.0.1" />
           </div>
-          <div class="form-group" style="width: 100px;">
+          <div class="form-group" style="width:90px;">
             <label class="form-label">Port</label>
             <input class="form-input font-mono" type="number" id="sPort" value="22" />
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Username *</label>
+          <label class="form-label">Username <span class="required">*</span></label>
           <input class="form-input font-mono" type="text" id="sUsername" placeholder="root" />
         </div>
         <div class="form-group">
@@ -143,7 +212,7 @@
         <div id="auth-key" class="auth-fields" style="display:none">
           <div class="form-group">
             <label class="form-label">Private Key Content (PEM)</label>
-            <textarea class="form-textarea font-mono" id="sPrivateKey" style="height: 120px;"></textarea>
+            <textarea class="form-textarea font-mono" id="sPrivateKey" style="height:110px;"></textarea>
           </div>
         </div>
         <div class="form-group">
@@ -156,26 +225,31 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" id="testServerBtn">🔌 Test Connection</button>
-        <button class="btn btn-primary" id="saveServerBtn" style="padding-left: 32px; padding-right: 32px;">Save</button>
+        <button class="btn btn-ghost" id="testServerBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+          Test Connection
+        </button>
+        <button class="btn btn-primary" id="saveServerBtn">Save Server</button>
       </div>
     </div>
   </div>
 
   <!-- Key Modal -->
   <div class="modal-overlay" id="keyModal">
-    <div class="modal" style="max-width:450px">
+    <div class="modal" style="max-width:440px">
       <div class="modal-header">
         <h2 class="modal-title">SSH Identity</h2>
-        <button class="modal-close" onclick="closeModal('keyModal')">✕</button>
+        <button class="modal-close" onclick="closeModal('keyModal')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body">
-        <div class="dash-nav" style="margin-bottom: 12px;">
-          <button class="dash-nav-btn active" id="keyGenTab">Generate New</button>
-          <button class="dash-nav-btn" id="keyImportTab">Import Existing</button>
+        <div class="seg-control">
+          <button class="seg-btn active" id="keyGenTab">Generate New</button>
+          <button class="seg-btn" id="keyImportTab">Import Existing</button>
         </div>
         <div class="form-group">
-          <label class="form-label">Identity Name *</label>
+          <label class="form-label">Identity Name <span class="required">*</span></label>
           <input class="form-input" type="text" id="kName" placeholder="My Secure Key" />
         </div>
         <div id="keyGenFields">
@@ -190,7 +264,7 @@
         <div id="keyImportFields" style="display:none">
           <div class="form-group">
             <label class="form-label">Private Key (PEM format)</label>
-            <textarea class="form-textarea font-mono" id="kPrivate" style="height: 150px;"></textarea>
+            <textarea class="form-textarea font-mono" id="kPrivate" style="height:140px;"></textarea>
           </div>
         </div>
       </div>
@@ -205,11 +279,13 @@
     <div class="modal" style="max-width:400px">
       <div class="modal-header">
         <h2 class="modal-title" id="proxyModalTitle">Network Proxy</h2>
-        <button class="modal-close" onclick="closeModal('proxyModal')">✕</button>
+        <button class="modal-close" onclick="closeModal('proxyModal')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Profile Name *</label>
+          <label class="form-label">Profile Name <span class="required">*</span></label>
           <input class="form-input" type="text" id="pName" placeholder="Jump Server A" />
         </div>
         <div class="form-group">
@@ -221,11 +297,11 @@
         </div>
         <div class="flex gap-3">
           <div class="form-group flex-1">
-            <label class="form-label">Host Address *</label>
+            <label class="form-label">Host Address <span class="required">*</span></label>
             <input class="form-input font-mono" type="text" id="pHost" placeholder="proxy.local" />
           </div>
-          <div class="form-group" style="width: 100px;">
-            <label class="form-label">Port *</label>
+          <div class="form-group" style="width:90px;">
+            <label class="form-label">Port <span class="required">*</span></label>
             <input class="form-input font-mono" type="number" id="pPort" value="1080" />
           </div>
         </div>
@@ -239,20 +315,25 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-primary" id="saveProxyBtn">Save Proxy Profile</button>
+        <button class="btn btn-primary" id="saveProxyBtn">Save Proxy</button>
       </div>
     </div>
   </div>
 
-  <!-- New Session Server Picker Modal -->
+  <!-- Server Picker Modal -->
   <div class="modal-overlay" id="serverPickerModal">
-    <div class="modal" style="max-width:450px">
+    <div class="modal" style="max-width:440px">
       <div class="modal-header">
         <h2 class="modal-title">Open Terminal</h2>
-        <button class="modal-close" onclick="closeModal('serverPickerModal')">✕</button>
+        <button class="modal-close" onclick="closeModal('serverPickerModal')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body">
-        <input class="form-input" type="search" id="pickerSearch" placeholder="Search servers to connect..." style="margin-bottom:12px" />
+        <div class="search-wrap" style="margin-bottom:4px;">
+          <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="form-input search-input" type="search" id="pickerSearch" placeholder="Search servers to connect…" />
+        </div>
         <div class="server-picker-list" id="pickerList"></div>
       </div>
     </div>
