@@ -73,22 +73,18 @@ router.post('/', requireAuth, (req, res) => {
 
 // POST /api/servers/temp
 router.post('/temp', requireAuth, (req, res) => {
-  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id, label_color, notes } = req.body;
+  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id } = req.body;
   if (!host || !username) return res.status(400).json({ error: 'host and username are required' });
-  const displayName = name || `${username}@${host}`;
+  const id = 'temp_' + uuidv4();
   const s = createTempServer({
-    id: 'temp_' + uuidv4(),
-    name: displayName,
-    host,
-    port: parseInt(port) || 22,
-    username,
+    id, name: name || 'Quick Connect', host, port: port || 22, username,
     auth_type: auth_type || 'password',
     password: password || null,
     private_key: private_key || null,
     key_id: key_id || null,
     proxy_id: proxy_id || null,
-    label_color: label_color || '#10b981',
-    notes: notes || null,
+    label_color: '#8b5cf6', // distinctive color
+    is_temp: true
   });
   res.status(201).json({ success: true, ...sanitize(s) });
 });

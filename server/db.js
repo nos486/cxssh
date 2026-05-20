@@ -115,22 +115,8 @@ function updateProxy(id, fields) {
 function deleteProxy(id) { getDb().prepare('DELETE FROM proxies WHERE id = ?').run(id); }
 
 // Servers
-const tempServers = new Map();
-
 function getServers() { return getDb().prepare('SELECT * FROM servers ORDER BY name ASC').all(); }
-function getServerById(id) {
-  if (id && id.startsWith('temp_')) {
-    return tempServers.get(id);
-  }
-  return getDb().prepare('SELECT * FROM servers WHERE id = ?').get(id);
-}
-function createTempServer(s) {
-  tempServers.set(s.id, s);
-  return s;
-}
-function deleteTempServer(id) {
-  tempServers.delete(id);
-}
+function getServerById(id) { return getDb().prepare('SELECT * FROM servers WHERE id = ?').get(id); }
 function createServer(s) {
   getDb().prepare(`INSERT INTO servers (id,name,host,port,username,auth_type,password,private_key,key_id,proxy_id,label_color,notes)
     VALUES (@id,@name,@host,@port,@username,@auth_type,@password,@private_key,@key_id,@proxy_id,@label_color,@notes)`).run(s);
@@ -145,6 +131,11 @@ function updateServer(id, fields) {
 }
 function deleteServer(id) { getDb().prepare('DELETE FROM servers WHERE id = ?').run(id); }
 function touchServer(id) { getDb().prepare("UPDATE servers SET last_connected = datetime('now') WHERE id = ?").run(id); }
+
+// Temp Servers (In-memory)
+const tempServers = new Map();
+function getTempServerById(id) { return tempServers.get(id); }
+function createTempServer(s) { tempServers.set(s.id, s); return s; }
 
 // Sessions
 function getSessions() {
@@ -162,6 +153,6 @@ module.exports = {
   getKeys, getKeyById, createKey, deleteKey,
   getProxies, getProxyById, createProxy, updateProxy, deleteProxy,
   getServers, getServerById, createServer, updateServer, deleteServer, touchServer,
-  createTempServer, deleteTempServer,
+  getTempServerById, createTempServer,
   getSessions, getSessionById, createSession, deleteSession, touchSession,
 };

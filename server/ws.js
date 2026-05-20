@@ -3,7 +3,7 @@ const net  = require('net');
 const { Client } = require('ssh2');
 const { SocksClient } = require('socks');
 const { v4: uuidv4 } = require('uuid');
-const { getServerById, getKeyById, getProxyById, touchServer, deleteTempServer } = require('./db');
+const { getServerById, getKeyById, getProxyById, touchServer, getTempServerById } = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 const SESSION_TTL = 30 * 60 * 1000;
@@ -45,9 +45,6 @@ class SessionEntry {
     try { if (this.stream) this.stream.end(); } catch {}
     try { if (this.conn)   this.conn.end();   } catch {}
     registry.delete(this.resumeKey);
-    if (this.serverId && this.serverId.startsWith('temp_')) {
-      deleteTempServer(this.serverId);
-    }
     console.log(`[SSH] Session ${this.resumeKey} destroyed`);
   }
 }
@@ -153,7 +150,12 @@ function setupWebSocket(wss) {
       return;
     }
 
-    const server = getServerById(serverId);
+    let server;
+    if (serverId && serverId.startsWith('temp_')) {
+      server = getTempServerById(serverId);
+    } else {
+      server = getServerById(serverId);
+    }
     if (!server) { ws.send(JSON.stringify({ type: 'error', data: 'Server not found' })); ws.close(); return; }
 
     const newKey = uuidv4();
@@ -171,7 +173,7 @@ function setupWebSocket(wss) {
     entry.conn = conn;
 
     conn.on('ready', () => {
-      if (!serverId.startsWith('temp_')) touchServer(serverId);
+      if (!server.is_temp) touchServer(serverId);
       conn.shell({ term: 'xterm-256color', cols, rows }, (err, stream) => {
         if (err) { entry.broadcast({ type: 'error', data: err.message }); entry.destroy(); return; }
         entry.stream = stream;

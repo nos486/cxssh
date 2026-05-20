@@ -35,7 +35,9 @@ let servers = [];
 let keys = [];
 let proxies = [];
 let terminals = []; // Array of { id, serverId, server, term, fit, ws, status, resumeKey }
+let tempTerminals = [];
 let activeWindowId = null;
+let activeTempWindowId = null;
 let currentView = 'dashboard';
 let editingId = null;
 let selectedColor = '#6366f1';
@@ -55,12 +57,10 @@ function persistWorkspace() {
   const state = {
     layout,
     activeWindowId,
-    items: terminals
-      .filter(t => t.serverId && !t.serverId.startsWith('temp_'))
-      .map(t => ({
-        serverId: t.serverId,
-        resumeKey: t.resumeKey
-      }))
+    items: terminals.map(t => ({
+      serverId: t.serverId,
+      resumeKey: t.resumeKey
+    }))
   };
   localStorage.setItem('cxssh_workspace', JSON.stringify(state));
 }
@@ -127,11 +127,11 @@ function switchView(viewId) {
   if (viewId === 'dashboard') loadServers();
   if (viewId === 'keys') loadKeys();
   if (viewId === 'proxies') loadProxies();
-  if (viewId === 'temp-terminal') {
-    setTimeout(() => terminals.forEach(t => { if (t.serverId.startsWith('temp_')) t.fit.fit(); }), 100);
-  }
   if (viewId === 'terminal') {
-    setTimeout(() => terminals.forEach(t => { if (!t.serverId.startsWith('temp_')) t.fit.fit(); }), 100);
+    setTimeout(() => terminals.forEach(t => t.fit.fit()), 100);
+  }
+  if (viewId === 'temp-terminal') {
+    setTimeout(() => tempTerminals.forEach(t => t.fit.fit()), 100);
   }
 }
 
@@ -179,13 +179,10 @@ function renderServers() {
         <span class="badge badge-accent">${s.auth_type.replace('_',' ')}</span>
         ${s.proxy_id ? '<span class="badge badge-warning">Tunneled</span>' : ''}
       </div>
-      <div class="server-card-connect flex gap-2">
-        <button class="btn btn-primary flex-1" onclick="connectToServer('${s.id}')">
+      <div class="server-card-connect">
+        <button class="btn btn-primary w-full" onclick="connectToServer('${s.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           Connect
-        </button>
-        <button class="btn btn-ghost" onclick="connectToServerTemp('${s.id}')" title="Temporary Connection">
-          ⚡ Temp
         </button>
       </div>
     </div>
@@ -285,11 +282,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
     <div class="resizer"></div>
   `;
   
-  const isTemp = serverId.startsWith('temp_');
-  const workspaceEl = document.getElementById(isTemp ? 'termWorkspaceTemp' : 'termWorkspace');
-  if (workspaceEl) {
-    workspaceEl.appendChild(win);
-  }
+  document.getElementById('termWorkspace').appendChild(win);
 
   const term = new Terminal({
     theme: termTheme,
@@ -330,7 +323,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
   // Focus handling
   win.addEventListener('mousedown', () => focusWindow(winId));
 
-  switchView(isTemp ? 'temp-terminal' : 'terminal');
+  switchView('terminal');
   // Force fit and init WS
   setTimeout(() => {
     try { 
@@ -349,11 +342,7 @@ function focusWindow(id) {
   activeWindowId = id;
   terminals.forEach(t => {
     t.el.classList.toggle('active', t.id === id);
-    if (t.id === id) {
-      t.term.focus();
-      const isTemp = t.serverId && t.serverId.startsWith('temp_');
-      switchView(isTemp ? 'temp-terminal' : 'terminal');
-    }
+    if (t.id === id) t.term.focus();
   });
   updateTabBadge();
   persistWorkspace();
@@ -415,105 +404,201 @@ function updateTabBadge() {
   const container = document.getElementById('termTabs');
   if (!container) return;
 
-  const permTerms = terminals.filter(t => t.serverId && !t.serverId.startsWith('temp_'));
-  const tempTerms = terminals.filter(t => t.serverId && t.serverId.startsWith('temp_'));
+  container.innerHTML = terminals.map(t => `
+    <div class="terminal-tab ${t.id === activeWindowId ? 'active' : ''}" onclick="focusWindow('${t.id}')">
+      <span class="color-dot" style="background:${t.server.label_color || '#6366f1'}"></span>
+      <span>${esc(t.server.name)}</span>
+      <span class="tab-close" onclick="event.stopPropagation(); closeTerminal('${t.id}')" title="Close">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </span>
+    </div>
+  `).join('');
 
   const badge = document.getElementById('tabCountBadge');
   if (badge) {
-    badge.textContent = permTerms.length;
-    badge.style.display = permTerms.length > 0 ? 'inline-block' : 'none';
-  }
-
-  const badgeTemp = document.getElementById('tabCountBadgeTemp');
-  if (badgeTemp) {
-    badgeTemp.textContent = tempTerms.length;
-    badgeTemp.style.display = tempTerms.length > 0 ? 'inline-block' : 'none';
-  }
-  
-  // Render persistent tabs
-  const tabsEl = document.getElementById('termTabs');
-  if (tabsEl) {
-    if (permTerms.length === 0) {
-      tabsEl.innerHTML = '';
-    } else {
-      tabsEl.innerHTML = permTerms.map(t => {
-        const isActive = t.id === activeWindowId;
-        const statusColor = t.status === 'connected' ? 'var(--success)' : t.status === 'connecting' ? 'var(--warning)' : 'var(--danger)';
-        return `
-          <div class="term-tab ${isActive ? 'active' : ''}" onclick="focusWindow('${t.id}')">
-            <span class="color-dot" style="background:${statusColor}"></span>
-            <span class="tab-label">${esc(t.server.name)}</span>
-            <span class="tab-close" onclick="event.stopPropagation(); closeTerminal('${t.id}')">&times;</span>
-          </div>
-        `;
-      }).join('');
-    }
-  }
-
-  // Render temp tabs
-  const tabsElTemp = document.getElementById('termTabsTemp');
-  if (tabsElTemp) {
-    if (tempTerms.length === 0) {
-      tabsElTemp.innerHTML = '';
-    } else {
-      tabsElTemp.innerHTML = tempTerms.map(t => {
-        const isActive = t.id === activeWindowId;
-        const statusColor = t.status === 'connected' ? 'var(--success)' : t.status === 'connecting' ? 'var(--warning)' : 'var(--danger)';
-        return `
-          <div class="term-tab ${isActive ? 'active' : ''}" onclick="focusWindow('${t.id}')">
-            <span class="color-dot" style="background:${statusColor}"></span>
-            <span class="tab-label">${esc(t.server.name)}</span>
-            <span class="tab-close" onclick="event.stopPropagation(); closeTerminal('${t.id}')">&times;</span>
-          </div>
-        `;
-      }).join('');
-    }
+    badge.textContent = terminals.length;
+    badge.style.display = terminals.length > 0 ? '' : 'none';
   }
 }
 
-function setLayout(mode, isTemp = false) {
-  const wsId = isTemp ? 'termWorkspaceTemp' : 'termWorkspace';
-  const gridBtnId = isTemp ? 'layoutGridBtnTemp' : 'layoutGridBtn';
-  const stackBtnId = isTemp ? 'layoutStackBtnTemp' : 'layoutStackBtn';
+function setLayout(mode) {
+  const ws = document.getElementById('termWorkspace');
+  ws.classList.remove('layout-tabs', 'layout-grid');
+  ws.classList.add('layout-' + mode);
+  terminals.forEach(t => {
+    if (t.fit) t.fit.fit();
+  });
+}
+
+// ── Temporary Window Manager (Quick Connect) ──
+document.getElementById('qcAuthType')?.addEventListener('change', (e) => {
+  document.getElementById('qcKeyGroup').style.display = e.target.value === 'managed_key' ? 'block' : 'none';
+});
+
+document.getElementById('btnQuickConnect')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btnQuickConnect');
+  const host = document.getElementById('qcHost').value;
+  const port = parseInt(document.getElementById('qcPort').value, 10);
+  const username = document.getElementById('qcUsername').value;
+  const password = document.getElementById('qcPassword').value;
+  const auth_type = document.getElementById('qcAuthType').value;
+  const key_id = document.getElementById('qcKeyId').value;
   
-  const ws = document.getElementById(wsId);
-  if (!ws) return;
+  if (!host || !username) return showToast('Host and User are required', 'error');
   
-  if (mode === 'grid') {
-    ws.classList.remove('layout-stack');
-    ws.classList.add('layout-grid');
-    document.getElementById(gridBtnId)?.classList.add('active');
-    document.getElementById(stackBtnId)?.classList.remove('active');
+  btn.disabled = true;
+  btn.textContent = '...';
+  
+  const res = await api('POST', '/api/servers/temp', {
+    host, port, username, password, auth_type, key_id
+  });
+  
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+  
+  if (res && res.success) {
+    document.getElementById('qcPassword').value = '';
+    connectToTempServer(res.id, res);
   } else {
-    ws.classList.remove('layout-grid');
-    ws.classList.add('layout-stack');
-    document.getElementById(gridBtnId)?.classList.remove('active');
-    document.getElementById(stackBtnId)?.classList.add('active');
+    showToast(res?.error || 'Failed to start temporary session', 'error');
   }
+});
+
+function connectToTempServer(serverId, server) {
+  const winId = 'tempwin_' + Math.random().toString(36).substr(2, 9);
   
-  setTimeout(() => {
-    terminals.forEach(t => {
-      const tIsTemp = t.serverId && t.serverId.startsWith('temp_');
-      if (tIsTemp === isTemp) {
-        t.fit.fit();
+  tempTerminals.forEach(t => t.el.classList.remove('active'));
+  activeTempWindowId = winId;
+
+  const win = document.createElement('div');
+  win.className = 'term-window active';
+  win.id = winId;
+  win.innerHTML = `
+    <div class="term-window-header">
+      <div class="term-window-title">
+        <span class="color-dot" style="background:${server.label_color}"></span>
+        ${esc(server.name)} (${esc(server.host)})
+      </div>
+      <div class="term-window-controls">
+        <button class="win-btn win-close" onclick="closeTempTerminal('${winId}')"></button>
+      </div>
+    </div>
+    <div class="term-window-body" id="body_${winId}"></div>
+    <div class="resizer"></div>
+  `;
+  
+  document.getElementById('tempTermWorkspace').appendChild(win);
+
+  const term = new Terminal({
+    theme: termTheme,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 13,
+    lineHeight: 1.2,
+    cursorBlink: true,
+    allowProposedApi: true
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon.WebLinksAddon());
+  
+  const body = document.getElementById(`body_${winId}`);
+  term.open(body);
+  
+  const terminalObj = {
+    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey: null, el: win
+  };
+  tempTerminals.push(terminalObj);
+  
+  const ro = new ResizeObserver(() => {
+    try {
+      fit.fit();
+      if (terminalObj.ws && terminalObj.ws.readyState === 1) {
+        terminalObj.ws.send(JSON.stringify({
+          type: 'resize', cols: term.cols, rows: term.rows
+        }));
       }
-    });
+    } catch (e) { console.warn('Fit error', e); }
+  });
+  ro.observe(body);
+  terminalObj.ro = ro;
+
+  win.addEventListener('mousedown', () => focusTempWindow(winId));
+
+  setTimeout(() => {
+    try { 
+      fit.fit();
+      initWebSocket(terminalObj);
+      updateTempTabBadge();
+      focusTempWindow(winId);
+    } catch(e){ console.warn('Init error', e); }
   }, 50);
-  
-  if (!isTemp) {
-    persistWorkspace();
+}
+
+function focusTempWindow(id) {
+  activeTempWindowId = id;
+  tempTerminals.forEach(t => {
+    t.el.classList.toggle('active', t.id === id);
+    if (t.id === id) t.term.focus();
+  });
+  updateTempTabBadge();
+}
+
+window.closeTempTerminal = function(id) {
+  const idx = tempTerminals.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const t = tempTerminals[idx];
+  if (t.ws) t.ws.close();
+  if (t.ro) t.ro.disconnect();
+  t.term.dispose();
+  t.el.remove();
+  tempTerminals.splice(idx, 1);
+  updateTempTabBadge();
+}
+
+function updateTempTabBadge() {
+  const container = document.getElementById('tempTermTabs');
+  if (!container) return;
+
+  container.innerHTML = tempTerminals.map(t => `
+    <div class="terminal-tab ${t.id === activeTempWindowId ? 'active' : ''}" onclick="focusTempWindow('${t.id}')">
+      <span class="color-dot" style="background:${t.server.label_color || '#8b5cf6'}"></span>
+      <span>${esc(t.server.name)}</span>
+      <span class="tab-close" onclick="event.stopPropagation(); window.closeTempTerminal('${t.id}')" title="Close">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </span>
+    </div>
+  `).join('');
+
+  const badge = document.getElementById('tempTabCountBadge');
+  if (badge) {
+    badge.textContent = tempTerminals.length;
+    badge.style.display = tempTerminals.length > 0 ? '' : 'none';
   }
 }
+
+function setTempLayout(mode) {
+  const ws = document.getElementById('tempTermWorkspace');
+  ws.classList.remove('layout-tabs', 'layout-grid');
+  ws.classList.add('layout-' + mode);
+  tempTerminals.forEach(t => {
+    if (t.fit) t.fit.fit();
+  });
+}
+
+document.getElementById('tempLayoutGridBtn')?.addEventListener('click', () => {
+  setTempLayout('grid');
+  document.getElementById('tempLayoutGridBtn').classList.add('active');
+  document.getElementById('tempLayoutStackBtn').classList.remove('active');
+});
+document.getElementById('tempLayoutStackBtn')?.addEventListener('click', () => {
+  setTempLayout('tabs');
+  document.getElementById('tempLayoutStackBtn').classList.add('active');
+  document.getElementById('tempLayoutGridBtn').classList.remove('active');
+});
+
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-// Bind all modal close buttons dynamically
-document.querySelectorAll('.close-modal-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    closeModal(btn.dataset.modal);
-  });
-});
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
   clearToken();
@@ -524,14 +609,6 @@ document.getElementById('addServerBtn').addEventListener('click', () => {
   editingId = null;
   resetServerForm();
   openModal('serverModal');
-});
-
-document.getElementById('openQuickConnectBtn').addEventListener('click', () => {
-  openModal('quickConnectModal');
-});
-
-document.getElementById('quickConnectTempBtn').addEventListener('click', () => {
-  openModal('quickConnectModal');
 });
 
 document.getElementById('tabAddBtn').addEventListener('click', () => {
@@ -561,10 +638,16 @@ window.startPickerSession = (id) => {
 };
 
 // Layout buttons
-document.getElementById('layoutGridBtn')?.addEventListener('click', () => setLayout('grid', false));
-document.getElementById('layoutStackBtn')?.addEventListener('click', () => setLayout('stack', false));
-document.getElementById('layoutGridBtnTemp')?.addEventListener('click', () => setLayout('grid', true));
-document.getElementById('layoutStackBtnTemp')?.addEventListener('click', () => setLayout('stack', true));
+document.getElementById('layoutGridBtn')?.addEventListener('click', () => {
+  setLayout('grid');
+  document.getElementById('layoutGridBtn').classList.add('active');
+  document.getElementById('layoutStackBtn').classList.remove('active');
+});
+document.getElementById('layoutStackBtn')?.addEventListener('click', () => {
+  setLayout('tabs');
+  document.getElementById('layoutStackBtn').classList.add('active');
+  document.getElementById('layoutGridBtn').classList.remove('active');
+});
 
 // Color picker
 function initColorPicker() {
@@ -585,149 +668,19 @@ function selectColor(c) {
 // ── Server Form Logic ──
 function populateSelectors() {
   const keySelect = document.getElementById('sKeyId');
+  const qcKeySelect = document.getElementById('qcKeyId');
+  const keyOptions = '<option value="">-- Select Identity --</option>' + keys.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
   if (keySelect) {
-    keySelect.innerHTML = '<option value="">-- Select Identity --</option>' + keys.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+    keySelect.innerHTML = keyOptions;
+  }
+  if (qcKeySelect) {
+    qcKeySelect.innerHTML = keyOptions;
   }
   const proxySelect = document.getElementById('sProxyId');
   if (proxySelect) {
     proxySelect.innerHTML = '<option value="">-- Direct Connection (No Proxy) --</option>' + proxies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   }
-  populateTempSelectors();
 }
-
-function populateTempSelectors() {
-  const keySelect = document.getElementById('tKeyId');
-  if (keySelect) {
-    keySelect.innerHTML = '<option value="">-- Select Identity --</option>' + keys.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
-  }
-  const proxySelect = document.getElementById('tProxyId');
-  if (proxySelect) {
-    proxySelect.innerHTML = '<option value="">-- Direct Connection (No Proxy) --</option>' + proxies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  }
-}
-
-// Temporary SSH forms
-document.getElementById('tAuthType')?.addEventListener('change', (e) => {
-  document.querySelectorAll('.tauth-fields').forEach(f => f.style.display = 'none');
-  const target = document.getElementById('tauth-' + e.target.value);
-  if (target) target.style.display = 'block';
-});
-
-document.getElementById('connectTempServerBtn')?.addEventListener('click', async () => {
-  const data = {
-    name: document.getElementById('tName').value || 'Temporary',
-    host: document.getElementById('tHost').value,
-    port: parseInt(document.getElementById('tPort').value, 10) || 22,
-    username: document.getElementById('tUsername').value,
-    auth_type: document.getElementById('tAuthType').value,
-    password: document.getElementById('tPassword').value,
-    private_key: document.getElementById('tPrivateKey').value,
-    key_id: document.getElementById('tKeyId').value || null,
-    proxy_id: document.getElementById('tProxyId').value || null,
-    label_color: '#10b981'
-  };
-
-  if (!data.host || !data.username) {
-    return showToast('Please fill Hostname and Username', 'error');
-  }
-
-  const btn = document.getElementById('connectTempServerBtn');
-  const oldText = btn.textContent;
-  btn.textContent = 'Connecting...';
-  btn.disabled = true;
-
-  try {
-    const res = await api('POST', '/api/servers/temp', data);
-    if (res && res.success) {
-      showToast('Temporary profile registered. Opening session...', 'success');
-      closeModal('quickConnectModal');
-      document.getElementById('tName').value = '';
-      document.getElementById('tHost').value = '';
-      document.getElementById('tPort').value = '22';
-      document.getElementById('tUsername').value = 'root';
-      document.getElementById('tPassword').value = '';
-      document.getElementById('tPrivateKey').value = '';
-      document.getElementById('tAuthType').value = 'password';
-      document.getElementById('tAuthType').dispatchEvent(new Event('change'));
-      
-      await connectToServer(res.id);
-    } else {
-      showToast(res?.error || 'Failed to initiate temporary connection', 'error');
-    }
-  } catch (e) {
-    showToast('An error occurred during connection', 'error');
-  } finally {
-    btn.textContent = oldText;
-    btn.disabled = false;
-  }
-});
-
-document.getElementById('testTempServerBtn')?.addEventListener('click', async () => {
-  const data = {
-    host: document.getElementById('tHost').value,
-    port: parseInt(document.getElementById('tPort').value, 10) || 22,
-    username: document.getElementById('tUsername').value,
-    auth_type: document.getElementById('tAuthType').value,
-    password: document.getElementById('tPassword').value,
-    private_key: document.getElementById('tPrivateKey').value,
-    key_id: document.getElementById('tKeyId').value || null,
-    proxy_id: document.getElementById('tProxyId').value || null,
-  };
-
-  if (!data.host || !data.username) {
-    return showToast('Please fill Hostname and Username', 'error');
-  }
-
-  const btn = document.getElementById('testTempServerBtn');
-  const oldText = btn.textContent;
-  btn.textContent = 'Testing...';
-  btn.disabled = true;
-
-  try {
-    const res = await api('POST', '/api/servers/test', data);
-    if (res && res.success) {
-      showToast('Connection successful!', 'success');
-    } else {
-      showToast('Connection failed: ' + (res?.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('Testing failed', 'error');
-  } finally {
-    btn.textContent = oldText;
-    btn.disabled = false;
-  }
-});
-
-window.connectToServerTemp = async (serverId) => {
-  const s = servers.find(x => x.id === serverId);
-  if (!s) return showToast('Server profile not found', 'error');
-
-  showToast(`Initiating temporary connection to ${s.name}...`, 'info');
-  const tempSrvData = {
-    name: `[Temp] ${s.name}`,
-    host: s.host,
-    port: s.port,
-    username: s.username,
-    auth_type: s.auth_type,
-    password: s.password,
-    private_key: s.private_key,
-    key_id: s.key_id,
-    proxy_id: s.proxy_id,
-    label_color: '#3b82f6',
-    notes: s.notes
-  };
-
-  try {
-    const res = await api('POST', '/api/servers/temp', tempSrvData);
-    if (res && res.success) {
-      await connectToServer(res.id);
-    } else {
-      showToast(res?.error || 'Failed to register temporary server profile', 'error');
-    }
-  } catch (e) {
-    showToast('Connection failed', 'error');
-  }
-};
 
 function resetServerForm() {
   document.getElementById('serverModalTitle').textContent = 'New Server';
@@ -975,6 +928,7 @@ boot();
 // Handle global resize
 window.addEventListener('resize', () => {
   terminals.forEach(t => t.fit.fit());
+  tempTerminals.forEach(t => t.fit.fit());
 });
 
 // Sidebar Toggle
@@ -984,6 +938,7 @@ document.getElementById('sidebarToggle')?.addEventListener('click', () => {
   // Wait for transition, then fit terminals
   setTimeout(() => {
     terminals.forEach(t => t.fit.fit());
+    tempTerminals.forEach(t => t.fit.fit());
   }, 300);
 });
 
