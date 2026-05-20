@@ -55,10 +55,12 @@ function persistWorkspace() {
   const state = {
     layout,
     activeWindowId,
-    items: terminals.map(t => ({
-      serverId: t.serverId,
-      resumeKey: t.resumeKey
-    }))
+    items: terminals
+      .filter(t => t.serverId && !t.serverId.startsWith('temp_'))
+      .map(t => ({
+        serverId: t.serverId,
+        resumeKey: t.resumeKey
+      }))
   };
   localStorage.setItem('cxssh_workspace', JSON.stringify(state));
 }
@@ -125,6 +127,7 @@ function switchView(viewId) {
   if (viewId === 'dashboard') loadServers();
   if (viewId === 'keys') loadKeys();
   if (viewId === 'proxies') loadProxies();
+  if (viewId === 'temp-ssh') loadTempSSHView();
   if (viewId === 'terminal') {
     setTimeout(() => terminals.forEach(t => t.fit.fit()), 100);
   }
@@ -298,6 +301,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
     id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey, el: win
   };
   terminals.push(terminalObj);
+  renderTempSessions();
   
   // Resize handler
   const ro = new ResizeObserver(() => {
@@ -325,6 +329,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
       fit.fit();
       initWebSocket(terminalObj);
       updateTabBadge();
+      renderTempSessions();
       if (shouldFocus) {
         focusWindow(winId);
       }
@@ -355,6 +360,7 @@ function closeTerminal(id) {
   
   updateTabBadge();
   persistWorkspace();
+  renderTempSessions();
 }
 
 function initWebSocket(t) {
@@ -373,6 +379,7 @@ function initWebSocket(t) {
       t.status = 'connected';
       t.resumeKey = m.resumeKey;
       persistWorkspace();
+      renderTempSessions();
     } else if (m.type === 'output') {
       const bytes = new Uint8Array(m.data.length);
       for(let i=0; i<m.data.length; i++) bytes[i] = m.data.charCodeAt(i);
@@ -380,6 +387,7 @@ function initWebSocket(t) {
     } else if (m.type === 'error' || m.type === 'disconnect') {
       t.status = 'error';
       t.term.writeln(`\r\n\x1b[31m✖ ${m.data}\x1b[0m`);
+      renderTempSessions();
     }
   };
   t.term.onData(data => {
@@ -503,7 +511,149 @@ function populateSelectors() {
   if (proxySelect) {
     proxySelect.innerHTML = '<option value="">-- Direct Connection (No Proxy) --</option>' + proxies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   }
+  populateTempSelectors();
 }
+
+function populateTempSelectors() {
+  const keySelect = document.getElementById('tKeyId');
+  if (keySelect) {
+    keySelect.innerHTML = '<option value="">-- Select Identity --</option>' + keys.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('');
+  }
+  const proxySelect = document.getElementById('tProxyId');
+  if (proxySelect) {
+    proxySelect.innerHTML = '<option value="">-- Direct Connection (No Proxy) --</option>' + proxies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  }
+}
+
+function renderTempSessions() {
+  const container = document.getElementById('tempSessionsList');
+  if (!container) return;
+
+  const tempTerms = terminals.filter(t => t.serverId && t.serverId.startsWith('temp_'));
+
+  if (tempTerms.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 24px 12px;">
+        <div class="empty-state-title" style="font-size: 13px;">No active temp connections</div>
+        <p class="empty-state-sub" style="font-size: 11px;">Quick connect to a system using the form on the left</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = tempTerms.map(t => `
+    <div class="temp-session-card">
+      <div class="temp-session-info">
+        <div class="temp-session-name">${esc(t.server.name)}</div>
+        <div class="temp-session-host">${esc(t.server.username)}@${esc(t.server.host)}:${t.server.port}</div>
+        <div class="temp-session-status ${t.status}">
+          <span class="color-dot" style="background:${t.status === 'connected' ? 'var(--success)' : t.status === 'connecting' ? 'var(--warning)' : 'var(--danger)'}"></span>
+          ${t.status}
+        </div>
+      </div>
+      <div class="temp-session-actions">
+        <button class="btn btn-ghost btn-sm" onclick="focusWindow('${t.id}')">Go</button>
+        <button class="btn btn-danger btn-sm" onclick="closeTerminal('${t.id}')">Close</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function loadTempSSHView() {
+  populateTempSelectors();
+  renderTempSessions();
+}
+
+// Temporary SSH forms
+document.getElementById('tAuthType')?.addEventListener('change', (e) => {
+  document.querySelectorAll('.tauth-fields').forEach(f => f.style.display = 'none');
+  const target = document.getElementById('tauth-' + e.target.value);
+  if (target) target.style.display = 'block';
+});
+
+document.getElementById('connectTempServerBtn')?.addEventListener('click', async () => {
+  const data = {
+    name: document.getElementById('tName').value || 'Temporary',
+    host: document.getElementById('tHost').value,
+    port: parseInt(document.getElementById('tPort').value, 10) || 22,
+    username: document.getElementById('tUsername').value,
+    auth_type: document.getElementById('tAuthType').value,
+    password: document.getElementById('tPassword').value,
+    private_key: document.getElementById('tPrivateKey').value,
+    key_id: document.getElementById('tKeyId').value || null,
+    proxy_id: document.getElementById('tProxyId').value || null,
+    label_color: '#10b981'
+  };
+
+  if (!data.host || !data.username) {
+    return showToast('Please fill Hostname and Username', 'error');
+  }
+
+  const btn = document.getElementById('connectTempServerBtn');
+  const oldText = btn.textContent;
+  btn.textContent = 'Connecting...';
+  btn.disabled = true;
+
+  try {
+    const res = await api('POST', '/api/servers/temp', data);
+    if (res && res.success) {
+      showToast('Temporary profile registered. Opening session...', 'success');
+      document.getElementById('tName').value = '';
+      document.getElementById('tHost').value = '';
+      document.getElementById('tPort').value = '22';
+      document.getElementById('tUsername').value = 'root';
+      document.getElementById('tPassword').value = '';
+      document.getElementById('tPrivateKey').value = '';
+      document.getElementById('tAuthType').value = 'password';
+      document.getElementById('tAuthType').dispatchEvent(new Event('change'));
+      
+      await connectToServer(res.id);
+    } else {
+      showToast(res?.error || 'Failed to initiate temporary connection', 'error');
+    }
+  } catch (e) {
+    showToast('An error occurred during connection', 'error');
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('testTempServerBtn')?.addEventListener('click', async () => {
+  const data = {
+    host: document.getElementById('tHost').value,
+    port: parseInt(document.getElementById('tPort').value, 10) || 22,
+    username: document.getElementById('tUsername').value,
+    auth_type: document.getElementById('tAuthType').value,
+    password: document.getElementById('tPassword').value,
+    private_key: document.getElementById('tPrivateKey').value,
+    key_id: document.getElementById('tKeyId').value || null,
+    proxy_id: document.getElementById('tProxyId').value || null,
+  };
+
+  if (!data.host || !data.username) {
+    return showToast('Please fill Hostname and Username', 'error');
+  }
+
+  const btn = document.getElementById('testTempServerBtn');
+  const oldText = btn.textContent;
+  btn.textContent = 'Testing...';
+  btn.disabled = true;
+
+  try {
+    const res = await api('POST', '/api/servers/test', data);
+    if (res && res.success) {
+      showToast('Connection successful!', 'success');
+    } else {
+      showToast('Connection failed: ' + (res?.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Testing failed', 'error');
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+});
 
 function resetServerForm() {
   document.getElementById('serverModalTitle').textContent = 'New Server';

@@ -115,8 +115,22 @@ function updateProxy(id, fields) {
 function deleteProxy(id) { getDb().prepare('DELETE FROM proxies WHERE id = ?').run(id); }
 
 // Servers
+const tempServers = new Map();
+
 function getServers() { return getDb().prepare('SELECT * FROM servers ORDER BY name ASC').all(); }
-function getServerById(id) { return getDb().prepare('SELECT * FROM servers WHERE id = ?').get(id); }
+function getServerById(id) {
+  if (id && id.startsWith('temp_')) {
+    return tempServers.get(id);
+  }
+  return getDb().prepare('SELECT * FROM servers WHERE id = ?').get(id);
+}
+function createTempServer(s) {
+  tempServers.set(s.id, s);
+  return s;
+}
+function deleteTempServer(id) {
+  tempServers.delete(id);
+}
 function createServer(s) {
   getDb().prepare(`INSERT INTO servers (id,name,host,port,username,auth_type,password,private_key,key_id,proxy_id,label_color,notes)
     VALUES (@id,@name,@host,@port,@username,@auth_type,@password,@private_key,@key_id,@proxy_id,@label_color,@notes)`).run(s);
@@ -148,5 +162,6 @@ module.exports = {
   getKeys, getKeyById, createKey, deleteKey,
   getProxies, getProxyById, createProxy, updateProxy, deleteProxy,
   getServers, getServerById, createServer, updateServer, deleteServer, touchServer,
+  createTempServer, deleteTempServer,
   getSessions, getSessionById, createSession, deleteSession, touchSession,
 };

@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../auth');
-const { getServers, getServerById, createServer, updateServer, deleteServer, getKeyById, getProxyById } = require('../db');
+const { getServers, getServerById, createServer, updateServer, deleteServer, getKeyById, getProxyById, createTempServer } = require('../db');
 const { Client } = require('ssh2');
 const { SocksClient } = require('socks');
 const net = require('net');
@@ -66,6 +66,28 @@ router.post('/', requireAuth, (req, res) => {
     key_id: key_id || null,
     proxy_id: proxy_id || null,
     label_color: label_color || '#6366f1',
+    notes: notes || null,
+  });
+  res.status(201).json({ success: true, ...sanitize(s) });
+});
+
+// POST /api/servers/temp
+router.post('/temp', requireAuth, (req, res) => {
+  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id, label_color, notes } = req.body;
+  if (!host || !username) return res.status(400).json({ error: 'host and username are required' });
+  const displayName = name || `${username}@${host}`;
+  const s = createTempServer({
+    id: 'temp_' + uuidv4(),
+    name: displayName,
+    host,
+    port: parseInt(port) || 22,
+    username,
+    auth_type: auth_type || 'password',
+    password: password || null,
+    private_key: private_key || null,
+    key_id: key_id || null,
+    proxy_id: proxy_id || null,
+    label_color: label_color || '#10b981',
     notes: notes || null,
   });
   res.status(201).json({ success: true, ...sanitize(s) });
