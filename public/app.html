@@ -45,13 +45,7 @@
           <span id="tabCountBadge" class="badge badge-accent nav-badge" style="display:none;">0</span>
         </div>
 
-        <div class="nav-item" data-view="temp-terminal" title="Quick Connect">
-          <span class="nav-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </span>
-          <span class="nav-text">Quick Connect</span>
-          <span id="tempTabCountBadge" class="badge badge-warning nav-badge" style="display:none;">0</span>
-        </div>
+
 
         <div class="sidebar-section-label" style="margin-top: 8px;">Security</div>
 
@@ -105,54 +99,12 @@
             </button>
           </div>
         </div>
-        <div class="server-grid" id="serverGrid"></div>
-      </section>
-
-      <!-- ── Workspace View ── -->
-      <section id="view-terminal" class="view-container terminal-view">
-        <div class="terminal-header">
-          <div class="term-header-left">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <span class="term-header-label">Sessions</span>
+        
+        <div id="quickConnectForm" style="padding: 12px 16px; margin-bottom: 20px; background: rgba(10,13,20,0.4); border: 1px solid var(--border); border-radius: 8px;">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Quick Connect (Temporary Session)
           </div>
-          <div class="terminal-tabs" id="termTabs"></div>
-          <div class="term-header-actions">
-            <button class="btn btn-ghost btn-sm btn-icon" id="tabAddBtn" title="New Session">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <div class="layout-divider"></div>
-            <button class="btn btn-ghost btn-sm btn-icon layout-btn active" id="layoutGridBtn" title="Tile Grid">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            </button>
-            <button class="btn btn-ghost btn-sm btn-icon layout-btn" id="layoutStackBtn" title="Tab View">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="terminal-workspace layout-grid" id="termWorkspace">
-          <!-- Terminal windows injected here -->
-        </div>
-      </section>
-
-      <!-- ── Quick Connect View ── -->
-      <section id="view-temp-terminal" class="view-container terminal-view">
-        <div class="terminal-header">
-          <div class="term-header-left">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            <span class="term-header-label">Quick Connect</span>
-          </div>
-          <div class="terminal-tabs" id="tempTermTabs"></div>
-          <div class="term-header-actions">
-            <div class="layout-divider"></div>
-            <button class="btn btn-ghost btn-sm btn-icon layout-btn active" id="tempLayoutGridBtn" title="Tile Grid">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            </button>
-            <button class="btn btn-ghost btn-sm btn-icon layout-btn" id="tempLayoutStackBtn" title="Tab View">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </button>
-          </div>
-        </div>
-        <div id="quickConnectForm" style="padding: 12px 16px; background: rgba(10,13,20,0.4); border-bottom: 1px solid var(--border);">
           <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap: wrap;">
             <div class="form-group flex-1" style="margin:0; min-width: 150px;">
               <label class="form-label" style="font-size:11px">Host *</label>
@@ -186,10 +138,37 @@
             </button>
           </div>
         </div>
-        <div class="terminal-workspace layout-grid" id="tempTermWorkspace" style="height: calc(100% - 100px);">
-          <!-- Temporary terminal windows injected here -->
+
+        <div class="server-grid" id="serverGrid"></div>
+      </section>
+
+      <!-- ── Workspace View ── -->
+      <section id="view-terminal" class="view-container terminal-view">
+        <div class="terminal-header">
+          <div class="term-header-left">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="term-header-label">Sessions</span>
+          </div>
+          <div class="terminal-tabs" id="termTabs"></div>
+          <div class="term-header-actions">
+            <button class="btn btn-ghost btn-sm btn-icon" id="tabAddBtn" title="New Session">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <div class="layout-divider"></div>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn active" id="layoutGridBtn" title="Tile Grid">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </button>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn" id="layoutStackBtn" title="Tab View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="terminal-workspace layout-grid" id="termWorkspace">
+          <!-- Terminal windows injected here -->
         </div>
       </section>
+
+
 
       <!-- ── SSH Keys View ── -->
       <section id="view-keys" class="view-container">

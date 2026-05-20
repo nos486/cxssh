@@ -4,23 +4,25 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
 > A self-hosted, dockerised SSH client that runs entirely in your browser.  
-> Manage servers, generate SSH keys, open multiple terminals in tabs, and persist sessions across page reloads — all in a sleek single-page desktop-style interface.
+> Manage servers, generate SSH keys, open multiple terminals, resize/adjust layouts, and persist sessions across page reloads — all in a sleek single-page desktop-style interface.
 
 ---
 
-## ✨ Features (v2.0)
+## ✨ Features (v2.1)
 
 | Feature | Description |
 |---|---|
 | 📱 **SPA Desktop UI** | Everything in one page — Sidebar navigation for a desktop app feel |
+| ⚡ **Temporary SSH** | Quick connect or connect to saved servers in temporary mode (cleared from layout/reconnects on refresh) |
 | 🗂️ **Draggable Tabs** | Open multiple terminals and **drag-to-swap** them to organise your workspace |
+| 📐 **Resizable Grid Layout** | Resize terminal window widths in Tile Grid mode by dragging borders; double-click borders to auto-adjust sizes evenly |
 | 🌐 **Proxy Tunneling** | Connect to servers through **SOCKS5** or **HTTP CONNECT** proxies |
 | 🔐 **JWT Auth** | Secure login with 30-day sessions |
 | 🖥️ **Server Manager** | Add / edit / delete SSH servers with colour labels and proxy selection |
 | 🔑 **SSH Key Manager** | Generate `ed25519` / RSA keys or import existing ones |
-| ♻️ **Persistent Sessions** | Refresh the page — SSH sessions stay alive on the server |
+| ♻️ **Persistent Sessions** | Refresh the page — Permanent SSH sessions stay alive on the server |
 | 💾 **Saved Sessions** | One-click reconnect to favourite servers |
-| ⚡ **Full xterm.js** | 256-colour terminal with resize, web-links & scrollback |
+| 📊 **Full xterm.js** | 256-colour terminal with automatic fit, web-links & scrollback |
 
 ---
 
@@ -35,14 +37,32 @@ cd cxssh
 cp .env.example .env
 # Edit .env — change ADMIN_PASSWORD and JWT_SECRET!
 
-# 3. Build and run
-docker-compose up -d --build
+# 3. Build dependencies image once (safeguards native modules like sqlite)
+docker build -t cxssh .
 
-# 4. Open in browser
+# 4. Run the project (code changes mount dynamically)
+docker-compose up -d
+
+# 5. Open in browser
 open http://localhost:3000/app
 ```
 
 Default login: **admin / admin**
+
+---
+
+## ⚡ Temporary vs Permanent Sessions
+
+- **Default State**: New sessions (including Quick Connect) are **Temporary** by default.
+- **Pill Toggles**: Toggle any terminal's persistence on-the-fly using the `⚡ Temporary` / `📌 Permanent` pill button at the top right of each terminal window.
+- **Persistence behavior**: Permanent sessions stay active and auto-reconnect on refresh. Temporary sessions do not persist in storage or reconnect on page reload.
+
+---
+
+## 📐 Grid Layout Resizing & Adjustment
+
+- **Drag to Resize**: In Tile Grid mode, hover between terminal windows, grab the border, and drag to resize individual widths.
+- **Auto-Adjust (Reset)**: **Double-click** the resize border to reset the flex layout, aligning adjacent windows to equal widths again.
 
 ---
 
@@ -55,18 +75,9 @@ Default login: **admin / admin**
 
 ---
 
-## 🗂️ Multi-Tab Terminal
-
-- Open terminals from the **Servers** or **Sessions** view.
-- Click **＋** in the terminal tab bar to connect to another server.
-- **Drag and Drop** tabs to reorder them exactly how you want.
-- Use the sidebar to switch between your dashboard and active terminals.
-
----
-
 ## ♻️ Session Persistence
 
-If you accidentally refresh the page, your SSH sessions keep running server-side:
+If you accidentally refresh the page, your permanent SSH sessions keep running server-side:
 - Reconnect instantly upon reload.
 - **150 KB output buffer** ensures you see what happened while you were away.
 - Idle sessions are cleaned up after **30 minutes** of inactivity.

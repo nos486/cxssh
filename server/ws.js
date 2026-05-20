@@ -13,9 +13,10 @@ const BUF_MAX    = 150 * 1024;
 const registry = new Map();
 
 class SessionEntry {
-  constructor(resumeKey, serverId) {
+  constructor(resumeKey, serverId, isTempSession = false) {
     this.resumeKey = resumeKey;
     this.serverId  = serverId;
+    this.isTempSession = isTempSession;
     this.conn      = null;
     this.stream    = null;
     this.clients   = new Set();
@@ -111,23 +112,25 @@ function attachClient(ws, entry, isResume) {
   }
   ws.send(JSON.stringify({ type: isResume ? 'resumed' : 'connected', resumeKey: entry.resumeKey, data: '' }));
 
-  ws.on('message', raw => {
-    try {
-      const msg = JSON.parse(raw);
-      if (!entry.alive) return;
-      if (msg.type === 'input' && entry.stream) entry.stream.write(msg.data);
-      else if (msg.type === 'resize' && entry.stream) entry.stream.setWindow(msg.rows, msg.cols, 0, 0);
-    } catch {}
+  ws.on('message', (msg, isBinary) => {
+    if (!isBinary) {
+      try {
+        const data = JSON.parse(msg.toString());
+        if (data.type === 'input' && entry.stream) {
+          entry.stream.write(data.data);
+        } else if (data.type === 'resize' && entry.stream) {
+          entry.stream.setWindow(data.rows, data.cols, 0, 0);
+        } else if (data.type === 'toggle_temp') {
+          entry.isTempSession = data.isTemp;
+        }
+      } catch(e) {}
+    } else {
+      if (entry.stream) entry.stream.write(msg);
+    }
   });
   ws.on('close', () => {
     entry.clients.delete(ws);
-    if (entry.clients.size === 0 && entry.alive) {
-      if (entry.serverId && entry.serverId.startsWith('temp_')) {
-        entry.destroy();
-      } else {
-        entry.scheduleCleanup();
-      }
-    }
+    if (entry.clients.size === 0 && entry.alive) entry.scheduleCleanup();
   });
 }
 
@@ -140,6 +143,7 @@ function setupWebSocket(wss) {
     const resumeKey = url.searchParams.get('resumeKey');
     const cols      = parseInt(url.searchParams.get('cols') || '220', 10);
     const rows      = parseInt(url.searchParams.get('rows') || '50',  10);
+    const isTempSession = url.searchParams.get('isTemp') === 'true';
 
     try { jwt.verify(token, JWT_SECRET); }
     catch { ws.send(JSON.stringify({ type: 'error', data: 'Authentication failed' })); ws.close(); return; }
@@ -159,7 +163,7 @@ function setupWebSocket(wss) {
     if (!server) { ws.send(JSON.stringify({ type: 'error', data: 'Server not found' })); ws.close(); return; }
 
     const newKey = uuidv4();
-    const entry  = new SessionEntry(newKey, serverId);
+    const entry  = new SessionEntry(newKey, serverId, isTempSession || server.is_temp);
     registry.set(newKey, entry);
 
     let connectOpts;
@@ -195,7 +199,7 @@ function setupWebSocket(wss) {
 function getActiveSessions() {
   const active = [];
   for (const [resumeKey, entry] of registry.entries()) {
-    if (entry.alive && entry.serverId && !entry.serverId.startsWith('temp_')) {
+    if (entry.alive && !entry.isTempSession) {
       active.push({ resumeKey, serverId: entry.serverId });
     }
   }

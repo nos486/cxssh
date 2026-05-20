@@ -34,10 +34,8 @@ function showToast(message, type = 'info') {
 let servers = [];
 let keys = [];
 let proxies = [];
-let terminals = []; // Array of { id, serverId, server, term, fit, ws, status, resumeKey }
-let tempTerminals = [];
+let terminals = []; // Array of { id, serverId, server, term, fit, ws, status, resumeKey, isTemp }
 let activeWindowId = null;
-let activeTempWindowId = null;
 let currentView = 'dashboard';
 let editingId = null;
 let selectedColor = '#6366f1';
@@ -57,7 +55,7 @@ function persistWorkspace() {
   const state = {
     layout,
     activeWindowId,
-    items: terminals.map(t => ({
+    items: terminals.filter(t => !t.isTemp).map(t => ({
       serverId: t.serverId,
       resumeKey: t.resumeKey
     }))
@@ -129,9 +127,6 @@ function switchView(viewId) {
   if (viewId === 'proxies') loadProxies();
   if (viewId === 'terminal') {
     setTimeout(() => terminals.forEach(t => t.fit.fit()), 100);
-  }
-  if (viewId === 'temp-terminal') {
-    setTimeout(() => tempTerminals.forEach(t => t.fit.fit()), 100);
   }
 }
 
@@ -254,11 +249,14 @@ function renderProxies() {
 }
 
 // ── Window Manager (Terminals) ──
-async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
+async function connectToServer(serverId, resumeKey = null, shouldFocus = true, isTemp = null) {
+  if (isTemp === null) {
+    isTemp = resumeKey ? false : true;
+  }
   const server = servers.find(s => s.id === serverId) || await api('GET', `/api/servers/${serverId}`);
   if (!server) return;
 
-  const winId = 'win_' + Math.random().toString(36).substr(2, 9);
+  const winId = (isTemp ? 'tempwin_' : 'win_') + Math.random().toString(36).substr(2, 9);
   
   if (shouldFocus) {
     terminals.forEach(t => t.el.classList.remove('active'));
@@ -275,6 +273,9 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
         ${esc(server.name)} (${esc(server.host)})
       </div>
       <div class="term-window-controls">
+        <button class="win-btn" onclick="window.toggleTempState('${winId}')" title="Toggle Permanent/Temporary Session" id="btn_toggle_${winId}" style="width: auto; padding: 0 8px; font-size: 11px; font-weight: 600; border-radius: 4px; background: ${isTemp ? 'rgba(234,179,8,0.2)' : 'rgba(99,102,241,0.2)'}; color: ${isTemp ? '#eab308' : '#818cf8'}; margin-right: 4px;">
+          ${isTemp ? '⚡ Temporary' : '📌 Permanent'}
+        </button>
         <button class="win-btn win-close" onclick="closeTerminal('${winId}')"></button>
       </div>
     </div>
@@ -300,7 +301,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
   term.open(body);
   
   const terminalObj = {
-    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey, el: win
+    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey, isTemp, el: win
   };
   terminals.push(terminalObj);
   
@@ -323,6 +324,64 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true) {
   // Focus handling
   win.addEventListener('mousedown', () => focusWindow(winId));
 
+  // Resizer drag logic
+  const resizer = win.querySelector('.resizer');
+  if (resizer) {
+    let startX, startWidth;
+    resizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startWidth = win.getBoundingClientRect().width;
+      
+      const overlay = document.createElement('div');
+      overlay.style.position = 'fixed';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100vw';
+      overlay.style.height = '100vh';
+      overlay.style.cursor = 'col-resize';
+      overlay.style.zIndex = '9999';
+      document.body.appendChild(overlay);
+
+      const doDrag = (moveEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const newWidth = Math.max(200, startWidth + deltaX);
+        win.style.flex = `0 0 ${newWidth}px`;
+        try {
+          fit.fit();
+          if (terminalObj.ws && terminalObj.ws.readyState === 1) {
+            terminalObj.ws.send(JSON.stringify({
+              type: 'resize', cols: term.cols, rows: term.rows
+            }));
+          }
+        } catch (err) {}
+      };
+
+      const stopDrag = () => {
+        document.removeEventListener('mousemove', doDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        overlay.remove();
+        setTimeout(() => {
+          terminals.forEach(t => {
+            try { t.fit.fit(); } catch (err) {}
+          });
+        }, 50);
+      };
+
+      document.addEventListener('mousemove', doDrag);
+      document.addEventListener('mouseup', stopDrag);
+    });
+
+    resizer.addEventListener('dblclick', () => {
+      win.style.flex = '1';
+      setTimeout(() => {
+        terminals.forEach(t => {
+          try { t.fit.fit(); } catch (err) {}
+        });
+      }, 50);
+    });
+  }
+
   switchView('terminal');
   // Force fit and init WS
   setTimeout(() => {
@@ -344,8 +403,30 @@ function focusWindow(id) {
     t.el.classList.toggle('active', t.id === id);
     if (t.id === id) t.term.focus();
   });
-  updateTabBadge();
   persistWorkspace();
+  updateTabBadge();
+}
+
+window.toggleTempState = function(winId) {
+  const t = terminals.find(x => x.id === winId);
+  if (!t) return;
+  t.isTemp = !t.isTemp;
+  
+  const btn = document.getElementById(`btn_toggle_${winId}`);
+  if (btn) {
+    btn.style.background = t.isTemp ? 'rgba(234,179,8,0.2)' : 'rgba(99,102,241,0.2)';
+    btn.style.color = t.isTemp ? '#eab308' : '#818cf8';
+    btn.innerHTML = t.isTemp ? '⚡ Temporary' : '📌 Permanent';
+  }
+  
+  if (t.ws && t.ws.readyState === 1) {
+    t.ws.send(JSON.stringify({ type: 'toggle_temp', isTemp: t.isTemp }));
+  }
+  
+  persistWorkspace();
+  updateTabBadge();
+  
+  showToast(t.isTemp ? 'Session is now temporary' : 'Session is now permanent', 'success');
 }
 
 function closeTerminal(id) {
@@ -369,6 +450,7 @@ function initWebSocket(t) {
   
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   let url = `${proto}//${location.host}/ws/ssh?token=${encodeURIComponent(getToken())}&serverId=${encodeURIComponent(t.serverId)}&cols=${cols}&rows=${rows}`;
+  if (t.isTemp) url += `&isTemp=true`;
   if (t.resumeKey) url += `&resumeKey=${encodeURIComponent(t.resumeKey)}`;
 
   t.ws = new WebSocket(url);
@@ -407,7 +489,7 @@ function updateTabBadge() {
   container.innerHTML = terminals.map(t => `
     <div class="terminal-tab ${t.id === activeWindowId ? 'active' : ''}" onclick="focusWindow('${t.id}')">
       <span class="color-dot" style="background:${t.server.label_color || '#6366f1'}"></span>
-      <span>${esc(t.server.name)}</span>
+      <span>${t.isTemp ? '⚡ ' : ''}${esc(t.server.name)}</span>
       <span class="tab-close" onclick="event.stopPropagation(); closeTerminal('${t.id}')" title="Close">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </span>
@@ -458,144 +540,11 @@ document.getElementById('btnQuickConnect')?.addEventListener('click', async () =
   
   if (res && res.success) {
     document.getElementById('qcPassword').value = '';
-    connectToTempServer(res.id, res);
+    connectToServer(res.id, null, true, true);
   } else {
     showToast(res?.error || 'Failed to start temporary session', 'error');
   }
 });
-
-function connectToTempServer(serverId, server) {
-  const winId = 'tempwin_' + Math.random().toString(36).substr(2, 9);
-  
-  tempTerminals.forEach(t => t.el.classList.remove('active'));
-  activeTempWindowId = winId;
-
-  const win = document.createElement('div');
-  win.className = 'term-window active';
-  win.id = winId;
-  win.innerHTML = `
-    <div class="term-window-header">
-      <div class="term-window-title">
-        <span class="color-dot" style="background:${server.label_color}"></span>
-        ${esc(server.name)} (${esc(server.host)})
-      </div>
-      <div class="term-window-controls">
-        <button class="win-btn win-close" onclick="closeTempTerminal('${winId}')"></button>
-      </div>
-    </div>
-    <div class="term-window-body" id="body_${winId}"></div>
-    <div class="resizer"></div>
-  `;
-  
-  document.getElementById('tempTermWorkspace').appendChild(win);
-
-  const term = new Terminal({
-    theme: termTheme,
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 13,
-    lineHeight: 1.2,
-    cursorBlink: true,
-    allowProposedApi: true
-  });
-  const fit = new FitAddon.FitAddon();
-  term.loadAddon(fit);
-  term.loadAddon(new WebLinksAddon.WebLinksAddon());
-  
-  const body = document.getElementById(`body_${winId}`);
-  term.open(body);
-  
-  const terminalObj = {
-    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey: null, el: win
-  };
-  tempTerminals.push(terminalObj);
-  
-  const ro = new ResizeObserver(() => {
-    try {
-      fit.fit();
-      if (terminalObj.ws && terminalObj.ws.readyState === 1) {
-        terminalObj.ws.send(JSON.stringify({
-          type: 'resize', cols: term.cols, rows: term.rows
-        }));
-      }
-    } catch (e) { console.warn('Fit error', e); }
-  });
-  ro.observe(body);
-  terminalObj.ro = ro;
-
-  win.addEventListener('mousedown', () => focusTempWindow(winId));
-
-  setTimeout(() => {
-    try { 
-      fit.fit();
-      initWebSocket(terminalObj);
-      updateTempTabBadge();
-      focusTempWindow(winId);
-    } catch(e){ console.warn('Init error', e); }
-  }, 50);
-}
-
-function focusTempWindow(id) {
-  activeTempWindowId = id;
-  tempTerminals.forEach(t => {
-    t.el.classList.toggle('active', t.id === id);
-    if (t.id === id) t.term.focus();
-  });
-  updateTempTabBadge();
-}
-
-window.closeTempTerminal = function(id) {
-  const idx = tempTerminals.findIndex(t => t.id === id);
-  if (idx === -1) return;
-  const t = tempTerminals[idx];
-  if (t.ws) t.ws.close();
-  if (t.ro) t.ro.disconnect();
-  t.term.dispose();
-  t.el.remove();
-  tempTerminals.splice(idx, 1);
-  updateTempTabBadge();
-}
-
-function updateTempTabBadge() {
-  const container = document.getElementById('tempTermTabs');
-  if (!container) return;
-
-  container.innerHTML = tempTerminals.map(t => `
-    <div class="terminal-tab ${t.id === activeTempWindowId ? 'active' : ''}" onclick="focusTempWindow('${t.id}')">
-      <span class="color-dot" style="background:${t.server.label_color || '#8b5cf6'}"></span>
-      <span>${esc(t.server.name)}</span>
-      <span class="tab-close" onclick="event.stopPropagation(); window.closeTempTerminal('${t.id}')" title="Close">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </span>
-    </div>
-  `).join('');
-
-  const badge = document.getElementById('tempTabCountBadge');
-  if (badge) {
-    badge.textContent = tempTerminals.length;
-    badge.style.display = tempTerminals.length > 0 ? '' : 'none';
-  }
-}
-
-function setTempLayout(mode) {
-  const ws = document.getElementById('tempTermWorkspace');
-  ws.classList.remove('layout-tabs', 'layout-grid');
-  ws.classList.add('layout-' + mode);
-  tempTerminals.forEach(t => {
-    if (t.fit) t.fit.fit();
-  });
-}
-
-document.getElementById('tempLayoutGridBtn')?.addEventListener('click', () => {
-  setTempLayout('grid');
-  document.getElementById('tempLayoutGridBtn').classList.add('active');
-  document.getElementById('tempLayoutStackBtn').classList.remove('active');
-});
-document.getElementById('tempLayoutStackBtn')?.addEventListener('click', () => {
-  setTempLayout('tabs');
-  document.getElementById('tempLayoutStackBtn').classList.add('active');
-  document.getElementById('tempLayoutGridBtn').classList.remove('active');
-});
-
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -928,7 +877,6 @@ boot();
 // Handle global resize
 window.addEventListener('resize', () => {
   terminals.forEach(t => t.fit.fit());
-  tempTerminals.forEach(t => t.fit.fit());
 });
 
 // Sidebar Toggle
@@ -938,7 +886,6 @@ document.getElementById('sidebarToggle')?.addEventListener('click', () => {
   // Wait for transition, then fit terminals
   setTimeout(() => {
     terminals.forEach(t => t.fit.fit());
-    tempTerminals.forEach(t => t.fit.fit());
   }, 300);
 });
 

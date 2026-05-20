@@ -8,8 +8,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-COPY . .
-
 # Ensure data directory exists
 RUN mkdir -p /app/data
 

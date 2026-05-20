@@ -2,13 +2,15 @@ version: '3.8'
 
 services:
   cxssh:
-    build: .
+    image: cxssh
     container_name: cxssh
     restart: unless-stopped
     ports:
       - "0.0.0.0:${PORT:-3000}:3000"
     volumes:
       - ./data:/app/data
+      - ./public:/app/public
+      - ./server:/app/server
     environment:
       - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET:-changeme-super-secret-jwt-key-2024}

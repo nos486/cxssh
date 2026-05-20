@@ -267,8 +267,8 @@ html, body {
 .term-window {
   background: var(--bg-surface); border: 1px solid var(--border);
   display: flex; flex-direction: column;
-  min-width: 280px; min-height: 200px; border-radius: var(--radius-md);
-  overflow: hidden; transition: border-color var(--transition), box-shadow var(--transition);
+  min-width: 200px; min-height: 200px; border-radius: var(--radius-md);
+  overflow: hidden; position: relative; transition: border-color var(--transition), box-shadow var(--transition);
 }
 .term-window.active { border-color: rgba(79,70,229,0.5); box-shadow: 0 0 0 1px rgba(79,70,229,0.25); z-index: 5; }
 
@@ -280,6 +280,24 @@ html, body {
 .layout-grid .term-window:first-child { border-left: none; border-radius: 0; }
 .layout-grid .term-window:last-child { border-right: none; }
 .layout-grid .term-window + .term-window { border-left-color: var(--border); }
+
+.layout-grid .resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.layout-grid .resizer:hover {
+  background: var(--accent-hover);
+}
+.layout-tabs .resizer {
+  display: none;
+}
 
 .term-window-header {
   height: 34px; background: rgba(15,18,26,0.95);
