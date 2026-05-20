@@ -6,6 +6,7 @@
 > A self-hosted, dockerised SSH client that runs entirely in your browser.  
 > Manage servers, generate SSH keys, open multiple terminals, and resize/adjust layouts — all in a sleek single-page desktop-style interface.
 
+<img width="2896" height="1578" alt="image" src="https://github.com/user-attachments/assets/0432bbdf-6ed4-45c3-8f75-5be952a06416" />
 ---
 
 ## ✨ Features (v2.1)
