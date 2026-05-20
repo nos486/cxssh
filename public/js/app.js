@@ -7,13 +7,14 @@ function clearToken() { localStorage.removeItem('cxssh_token'); }
 async function api(method, path, body) {
   const res = await fetch(path, {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       'X-CxSSH-Token': getToken(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) { clearToken(); window.location.href = '/'; return null; }
+  if (res.status === 401 || res.status === 403) { clearToken(); window.location.href = '/'; return null; }
   return res.json();
 }
 

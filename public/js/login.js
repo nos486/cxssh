@@ -15,13 +15,14 @@ function clearToken() {
 async function api(method, path, body) {
   const res = await fetch(path, {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(getToken() ? { 'X-CxSSH-Token': getToken() } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     clearToken();
     window.location.href = '/';
     return null;
@@ -65,6 +66,7 @@ if (loginForm) {
     try {
       const data = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       }).then(r => r.json());

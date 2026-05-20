@@ -15,12 +15,12 @@ router.post('/login', (req, res) => {
 
   const user = getUserByUsername(username);
   if (!user) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+    return res.status(403).json({ error: 'Invalid credentials' });
   }
 
   const valid = bcrypt.compareSync(password, user.password_hash);
   if (!valid) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+    return res.status(403).json({ error: 'Invalid credentials' });
   }
 
   const token = jwt.sign(
@@ -43,14 +43,14 @@ function requireAuth(req, res, next) {
   }
 
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(403).json({ error: 'Unauthorized' });
   }
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload;
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(403).json({ error: 'Invalid or expired token' });
   }
 }
 
