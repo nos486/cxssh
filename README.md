@@ -4,7 +4,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
 > A self-hosted, dockerised SSH client that runs entirely in your browser.  
-> Manage servers, generate SSH keys, open multiple terminals, resize/adjust layouts, and persist sessions across page reloads — all in a sleek single-page desktop-style interface.
+> Manage servers, generate SSH keys, open multiple terminals, and resize/adjust layouts — all in a sleek single-page desktop-style interface.
 
 ---
 
@@ -13,14 +13,12 @@
 | Feature | Description |
 |---|---|
 | 📱 **SPA Desktop UI** | Everything in one page — Sidebar navigation for a desktop app feel |
-| ⚡ **Temporary SSH** | Quick connect or connect to saved servers in temporary mode (cleared from layout/reconnects on refresh) |
 | 🗂️ **Draggable Tabs** | Open multiple terminals and **drag-to-swap** them to organise your workspace |
 | 📐 **Resizable Grid Layout** | Resize terminal window widths in Tile Grid mode by dragging borders; double-click borders to auto-adjust sizes evenly |
 | 🌐 **Proxy Tunneling** | Connect to servers through **SOCKS5** or **HTTP CONNECT** proxies |
 | 🔐 **JWT Auth** | Secure login with 30-day sessions |
 | 🖥️ **Server Manager** | Add / edit / delete SSH servers with colour labels and proxy selection |
 | 🔑 **SSH Key Manager** | Generate `ed25519` / RSA keys or import existing ones |
-| ♻️ **Persistent Sessions** | Refresh the page — Permanent SSH sessions stay alive on the server |
 | 💾 **Saved Sessions** | One-click reconnect to favourite servers |
 | 📊 **Full xterm.js** | 256-colour terminal with automatic fit, web-links & scrollback |
 
@@ -51,13 +49,6 @@ Default login: **admin / admin**
 
 ---
 
-## ⚡ Temporary vs Permanent Sessions
-
-- **Default State**: New sessions (including Quick Connect) are **Temporary** by default.
-- **Pill Toggles**: Toggle any terminal's persistence on-the-fly using the `⚡ Temporary` / `📌 Permanent` pill button at the top right of each terminal window.
-- **Persistence behavior**: Permanent sessions stay active and auto-reconnect on refresh. Temporary sessions do not persist in storage or reconnect on page reload.
-
----
 
 ## 📐 Grid Layout Resizing & Adjustment
 
@@ -75,14 +66,6 @@ Default login: **admin / admin**
 
 ---
 
-## ♻️ Session Persistence
-
-If you accidentally refresh the page, your permanent SSH sessions keep running server-side:
-- Reconnect instantly upon reload.
-- **150 KB output buffer** ensures you see what happened while you were away.
-- Idle sessions are cleaned up after **30 minutes** of inactivity.
-
----
 
 ## 🏗️ Tech Stack
 

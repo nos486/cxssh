@@ -50,61 +50,13 @@ const termTheme = {
 
 // ── Persistence ──
 function persistWorkspace() {
-  const ws = document.getElementById('termWorkspace');
-  const layout = ws.classList.contains('layout-grid') ? 'grid' : 'tabs';
-  const state = {
-    layout,
-    activeWindowId,
-    items: terminals.filter(t => !t.isTemp).map(t => ({
-      serverId: t.serverId,
-      resumeKey: t.resumeKey
-    }))
-  };
-  localStorage.setItem('cxssh_workspace', JSON.stringify(state));
+  // No-op: Sessions are purely ephemeral now
 }
 
 async function restoreWorkspace() {
-  let items = [];
-  const saved = localStorage.getItem('cxssh_workspace');
-  if (saved) {
-    try {
-      const state = JSON.parse(saved);
-      if (state.items) items = state.items;
-      setLayout('grid');
-    } catch (e) {
-      console.error('Failed to parse local workspace', e);
-      setLayout('grid');
-    }
-  } else {
-    setLayout('grid');
-  }
-
+  setLayout('grid');
   // Fetch all servers first to ensure we have data
   servers = await api('GET', '/api/servers') || [];
-
-  // Fetch globally active sessions from the backend (session roaming)
-  try {
-    const active = await api('GET', '/api/active-sessions');
-    if (active && active.length > 0) {
-      const existingKeys = new Set(items.map(i => i.resumeKey));
-      for (const a of active) {
-        if (!existingKeys.has(a.resumeKey)) {
-          items.push(a);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to fetch active sessions from server', e);
-  }
-
-  if (items.length > 0) {
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      // Always focus the first one on refresh
-      await connectToServer(item.serverId, item.resumeKey, i === 0);
-      await new Promise(r => setTimeout(r, 50));
-    }
-  }
 }
 
 // ── Navigation ──
@@ -249,14 +201,11 @@ function renderProxies() {
 }
 
 // ── Window Manager (Terminals) ──
-async function connectToServer(serverId, resumeKey = null, shouldFocus = true, isTemp = null) {
-  if (isTemp === null) {
-    isTemp = resumeKey ? false : true;
-  }
+async function connectToServer(serverId, shouldFocus = true) {
   const server = servers.find(s => s.id === serverId) || await api('GET', `/api/servers/${serverId}`);
   if (!server) return;
 
-  const winId = (isTemp ? 'tempwin_' : 'win_') + Math.random().toString(36).substr(2, 9);
+  const winId = 'win_' + Math.random().toString(36).substr(2, 9);
   
   if (shouldFocus) {
     terminals.forEach(t => t.el.classList.remove('active'));
@@ -273,9 +222,6 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true, i
         ${esc(server.name)} (${esc(server.host)})
       </div>
       <div class="term-window-controls">
-        <button class="win-btn" onclick="window.toggleTempState('${winId}')" title="Toggle Permanent/Temporary Session" id="btn_toggle_${winId}" style="width: auto; padding: 0 8px; font-size: 11px; font-weight: 600; border-radius: 4px; background: ${isTemp ? 'rgba(234,179,8,0.2)' : 'rgba(99,102,241,0.2)'}; color: ${isTemp ? '#eab308' : '#818cf8'}; margin-right: 4px;">
-          ${isTemp ? '⚡ Temporary' : '📌 Permanent'}
-        </button>
         <button class="win-btn win-close" onclick="closeTerminal('${winId}')"></button>
       </div>
     </div>
@@ -301,7 +247,7 @@ async function connectToServer(serverId, resumeKey = null, shouldFocus = true, i
   term.open(body);
   
   const terminalObj = {
-    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', resumeKey, isTemp, el: win
+    id: winId, serverId, server, term, fit, ws: null, status: 'connecting', el: win
   };
   terminals.push(terminalObj);
   
@@ -403,30 +349,7 @@ function focusWindow(id) {
     t.el.classList.toggle('active', t.id === id);
     if (t.id === id) t.term.focus();
   });
-  persistWorkspace();
   updateTabBadge();
-}
-
-window.toggleTempState = function(winId) {
-  const t = terminals.find(x => x.id === winId);
-  if (!t) return;
-  t.isTemp = !t.isTemp;
-  
-  const btn = document.getElementById(`btn_toggle_${winId}`);
-  if (btn) {
-    btn.style.background = t.isTemp ? 'rgba(234,179,8,0.2)' : 'rgba(99,102,241,0.2)';
-    btn.style.color = t.isTemp ? '#eab308' : '#818cf8';
-    btn.innerHTML = t.isTemp ? '⚡ Temporary' : '📌 Permanent';
-  }
-  
-  if (t.ws && t.ws.readyState === 1) {
-    t.ws.send(JSON.stringify({ type: 'toggle_temp', isTemp: t.isTemp }));
-  }
-  
-  persistWorkspace();
-  updateTabBadge();
-  
-  showToast(t.isTemp ? 'Session is now temporary' : 'Session is now permanent', 'success');
 }
 
 function closeTerminal(id) {
@@ -450,16 +373,12 @@ function initWebSocket(t) {
   
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   let url = `${proto}//${location.host}/ws/ssh?token=${encodeURIComponent(getToken())}&serverId=${encodeURIComponent(t.serverId)}&cols=${cols}&rows=${rows}`;
-  if (t.isTemp) url += `&isTemp=true`;
-  if (t.resumeKey) url += `&resumeKey=${encodeURIComponent(t.resumeKey)}`;
 
   t.ws = new WebSocket(url);
   t.ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.type === 'connected' || m.type === 'resumed') {
+    if (m.type === 'connected') {
       t.status = 'connected';
-      t.resumeKey = m.resumeKey;
-      persistWorkspace();
     } else if (m.type === 'output') {
       const bytes = new Uint8Array(m.data.length);
       for(let i=0; i<m.data.length; i++) bytes[i] = m.data.charCodeAt(i);
@@ -489,7 +408,7 @@ function updateTabBadge() {
   container.innerHTML = terminals.map(t => `
     <div class="terminal-tab ${t.id === activeWindowId ? 'active' : ''}" onclick="focusWindow('${t.id}')">
       <span class="color-dot" style="background:${t.server.label_color || '#6366f1'}"></span>
-      <span>${t.isTemp ? '⚡ ' : ''}${esc(t.server.name)}</span>
+      <span>${esc(t.server.name)}</span>
       <span class="tab-close" onclick="event.stopPropagation(); closeTerminal('${t.id}')" title="Close">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </span>
