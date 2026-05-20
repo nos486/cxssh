@@ -3,81 +3,56 @@
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-> A self-hosted, dockerised SSH client that runs entirely in your browser.  
-> Manage servers, generate SSH keys, open multiple terminals, and resize/adjust layouts — all in a sleek single-page desktop-style interface.
+A self-hosted, dockerised SSH client that runs entirely in your browser. Sleek single-page interface with tab management, resizable gridded layouts, proxy tunneling, and secure local key storage.
 
-<img width="2896" height="1578" alt="image" src="https://github.com/user-attachments/assets/0432bbdf-6ed4-45c3-8f75-5be952a06416" />
+![alt text](image.png)
+
 ---
 
-## ✨ Features (v2.1)
+## ✨ Features
 
-| Feature | Description |
-|---|---|
-| 📱 **SPA Desktop UI** | Everything in one page — Sidebar navigation for a desktop app feel |
-| 🗂️ **Draggable Tabs** | Open multiple terminals and **drag-to-swap** them to organise your workspace |
-| 📐 **Resizable Grid Layout** | Resize terminal window widths in Tile Grid mode by dragging borders; double-click borders to auto-adjust sizes evenly |
-| 🌐 **Proxy Tunneling** | Connect to servers through **SOCKS5** or **HTTP CONNECT** proxies |
-| 🔐 **JWT Auth** | Secure login with 30-day sessions |
-| 🖥️ **Server Manager** | Add / edit / delete SSH servers with colour labels and proxy selection |
-| 🔑 **SSH Key Manager** | Generate `ed25519` / RSA keys or import existing ones |
-| 💾 **Saved Sessions** | One-click reconnect to favourite servers |
-| 📊 **Full xterm.js** | 256-colour terminal with automatic fit, web-links & scrollback |
+- 🖥️ **SPA Desktop UI**: Sleek, glassmorphism-based single page application.
+- 🗂️ **Draggable Tabs & Grid Layout**: Open multiple terminals side-by-side. Drag tabs to reorder, or drag borders to resize window widths.
+- 🌐 **Proxy Tunneling**: Route SSH traffic through SOCKS5 or HTTP proxies.
+- 🔐 **Secure & Private**: JWT Auth, secure cookies, and local database (SQLite) for storing server profiles and SSH Keys.
+- ⚡ **Ephemeral Sessions**: Closing/refreshing the browser immediately closes the remote SSH process safely (no background zombie processes).
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone
-git clone https://github.com/nos486/cxssh.git
-cd cxssh
+# 1. Clone & enter
+git clone https://github.com/nos486/cxssh.git && cd cxssh
 
-# 2. Customise credentials
+# 2. Setup env
 cp .env.example .env
-# Edit .env — change ADMIN_PASSWORD and JWT_SECRET!
+# Edit .env and change ADMIN_PASSWORD and JWT_SECRET!
 
-# 3. Build dependencies image once (safeguards native modules like sqlite)
+# 3. Build & Run
 docker build -t cxssh .
-
-# 4. Run the project (code changes mount dynamically)
 docker-compose up -d
-
-# 5. Open in browser
-open http://localhost:3000/app
 ```
 
-Default login: **admin / admin**
+Open **`http://localhost:3000/app`** (Default: `admin` / `admin`).
 
 ---
 
+## 📐 Layout Controls
 
-## 📐 Grid Layout Resizing & Adjustment
-
-- **Drag to Resize**: In Tile Grid mode, hover between terminal windows, grab the border, and drag to resize individual widths.
-- **Auto-Adjust (Reset)**: **Double-click** the resize border to reset the flex layout, aligning adjacent windows to equal widths again.
+- **Resize**: Hover between terminal windows in grid mode and drag to adjust width.
+- **Equalize**: Double-click the resize border to reset layout widths evenly.
 
 ---
 
 ## 🌐 Proxy Setup
 
-1. Navigate to **Proxies** in the sidebar.
-2. Click **+ Add Proxy** and configure your SOCKS5 or HTTP tunnel.
-3. Edit any **Server** and select the proxy profile from the dropdown.
-4. All connections (including tests) will now tunnel through that proxy.
-
----
-
-
-## 🏗️ Tech Stack
-
-- **Backend**: Node.js 20, Express, `ssh2`, `ws`, `socks`, `better-sqlite3`
-- **Frontend**: Vanilla JS (SPA), xterm.js 5, CSS Glassmorphism
-- **Container**: Docker / Docker Compose
+1. Add SOCKS5/HTTP proxies in the **Proxies** tab.
+2. Link any proxy profile to a server in the **Servers** manager.
 
 ---
 
 ## 🔒 Security Notes
 
-- **Change** `ADMIN_PASSWORD` and `JWT_SECRET` before exposing to the internet.
-- Use a reverse proxy (like Nginx or Caddy) for HTTPS.
-- SSH keys are stored in the local SQLite database (`/app/data/cxssh.db`).
+- Change default credentials before exposing to the internet.
+- Put behind a reverse proxy (like Nginx Proxy Manager, Nginx, or Caddy) with SSL enabled.
