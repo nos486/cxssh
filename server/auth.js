@@ -34,12 +34,19 @@ router.post('/login', (req, res) => {
 
 // Middleware: verify JWT
 function requireAuth(req, res, next) {
+  let token = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else if (req.headers['x-cxssh-token']) {
+    token = req.headers['x-cxssh-token'];
+  }
+
+  if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
-    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload;
     next();
   } catch {

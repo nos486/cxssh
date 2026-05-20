@@ -8,7 +8,7 @@ async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
+      'X-CxSSH-Token': getToken(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
