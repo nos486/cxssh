@@ -56,6 +56,18 @@ function persistWorkspace() {
   // No-op: Sessions are purely ephemeral now
 }
 
+function fitTerminal(t) {
+  if (!t || !t.fit) return;
+  try {
+    t.fit.fit();
+    if (t.ws && t.ws.readyState === 1) {
+      t.ws.send(JSON.stringify({ type: 'resize', cols: t.term.cols, rows: t.term.rows }));
+    }
+  } catch (err) {
+    console.warn('Fit error', err);
+  }
+}
+
 async function restoreWorkspace() {
   setLayout('grid');
   // Fetch all servers first to ensure we have data
@@ -81,10 +93,10 @@ function switchView(viewId) {
   if (viewId === 'keys') loadKeys();
   if (viewId === 'proxies') loadProxies();
   if (viewId === 'terminal') {
-    setTimeout(() => terminals.forEach(t => t.fit && t.fit.fit()), 100);
+    setTimeout(() => terminals.forEach(fitTerminal), 100);
   }
   if (viewId === 'perm') {
-    setTimeout(() => permTerminals.forEach(t => t.fit && t.fit.fit()), 100);
+    setTimeout(() => permTerminals.forEach(fitTerminal), 100);
   }
 }
 
@@ -262,18 +274,7 @@ async function connectToServer(serverId, shouldFocus = true) {
   terminals.push(terminalObj);
   
   // Resize handler
-  const ro = new ResizeObserver(() => {
-    try {
-      fit.fit();
-      if (terminalObj.ws && terminalObj.ws.readyState === 1) {
-        terminalObj.ws.send(JSON.stringify({
-          type: 'resize',
-          cols: term.cols,
-          rows: term.rows
-        }));
-      }
-    } catch (e) { console.warn('Fit error', e); }
-  });
+  const ro = new ResizeObserver(() => fitTerminal(terminalObj));
   ro.observe(body);
   terminalObj.ro = ro; // Keep for cleanup
 
@@ -303,25 +304,14 @@ async function connectToServer(serverId, shouldFocus = true) {
         const deltaX = moveEvent.clientX - startX;
         const newWidth = Math.max(200, startWidth + deltaX);
         win.style.flex = `0 0 ${newWidth}px`;
-        try {
-          fit.fit();
-          if (terminalObj.ws && terminalObj.ws.readyState === 1) {
-            terminalObj.ws.send(JSON.stringify({
-              type: 'resize', cols: term.cols, rows: term.rows
-            }));
-          }
-        } catch (err) {}
+        fitTerminal(terminalObj);
       };
 
       const stopDrag = () => {
         document.removeEventListener('mousemove', doDrag);
         document.removeEventListener('mouseup', stopDrag);
         overlay.remove();
-        setTimeout(() => {
-          terminals.forEach(t => {
-            try { t.fit.fit(); } catch (err) {}
-          });
-        }, 50);
+        setTimeout(() => terminals.forEach(fitTerminal), 50);
       };
 
       document.addEventListener('mousemove', doDrag);
@@ -330,11 +320,7 @@ async function connectToServer(serverId, shouldFocus = true) {
 
     resizer.addEventListener('dblclick', () => {
       win.style.flex = '1';
-      setTimeout(() => {
-        terminals.forEach(t => {
-          try { t.fit.fit(); } catch (err) {}
-        });
-      }, 50);
+      setTimeout(() => terminals.forEach(fitTerminal), 50);
     });
   }
 
@@ -342,7 +328,7 @@ async function connectToServer(serverId, shouldFocus = true) {
   // Force fit and init WS
   setTimeout(() => {
     try { 
-      fit.fit();
+      fitTerminal(terminalObj);
       initWebSocket(terminalObj);
       updateTabBadge();
       if (shouldFocus) {
@@ -436,18 +422,14 @@ function setLayout(mode) {
   const ws = document.getElementById('termWorkspace');
   ws.classList.remove('layout-tabs', 'layout-grid');
   ws.classList.add('layout-' + mode);
-  terminals.forEach(t => {
-    if (t.fit) t.fit.fit();
-  });
+  terminals.forEach(fitTerminal);
 }
 
 function setPermLayout(mode) {
   const ws = document.getElementById('permWorkspace');
   ws.classList.remove('layout-tabs', 'layout-grid');
   ws.classList.add('layout-' + mode);
-  permTerminals.forEach(t => {
-    if (t.fit) t.fit.fit();
-  });
+  permTerminals.forEach(fitTerminal);
 }
 
 // ── Permanent Workspace ───────────────────────────────────────────────────────
@@ -533,14 +515,7 @@ function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
   permTerminals.push(termObj);
 
   // Resize observer
-  const ro = new ResizeObserver(() => {
-    try {
-      fit.fit();
-      if (termObj.ws && termObj.ws.readyState === 1) {
-        termObj.ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-      }
-    } catch {}
-  });
+  const ro = new ResizeObserver(() => fitTerminal(termObj));
   ro.observe(body);
   termObj.ro = ro;
 
@@ -558,20 +533,20 @@ function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
       document.body.appendChild(overlay);
       const doDrag = mv => {
         win.style.flex = `0 0 ${Math.max(200, startWidth + mv.clientX - startX)}px`;
-        try { fit.fit(); } catch {}
+        fitTerminal(termObj);
       };
       const stopDrag = () => {
         document.removeEventListener('mousemove', doDrag);
         document.removeEventListener('mouseup', stopDrag);
         overlay.remove();
-        setTimeout(() => permTerminals.forEach(t => { try { t.fit.fit(); } catch {} }), 50);
+        setTimeout(() => permTerminals.forEach(fitTerminal), 50);
       };
       document.addEventListener('mousemove', doDrag);
       document.addEventListener('mouseup', stopDrag);
     });
     resizer.addEventListener('dblclick', () => {
       win.style.flex = '1';
-      setTimeout(() => permTerminals.forEach(t => { try { t.fit.fit(); } catch {} }), 50);
+      setTimeout(() => permTerminals.forEach(fitTerminal), 50);
     });
   }
 
@@ -630,7 +605,7 @@ async function connectPermServer(serverId) {
   switchView('perm');
   setTimeout(() => {
     try {
-      termObj.fit.fit();
+      fitTerminal(termObj);
       initPermWebSocket(termObj);
       updatePermTabBadge();
       focusPermWindow(termObj.id);
@@ -648,7 +623,7 @@ async function restorePermWorkspace() {
     // Small stagger to avoid hammering the backend
     await new Promise(r => setTimeout(r, 80));
     try {
-      termObj.fit.fit();
+      fitTerminal(termObj);
       initPermWebSocket(termObj);
     } catch {}
   }
@@ -1053,8 +1028,8 @@ boot();
 
 // Handle global resize
 window.addEventListener('resize', () => {
-  terminals.forEach(t => t.fit && t.fit.fit());
-  permTerminals.forEach(t => t.fit && t.fit.fit());
+  terminals.forEach(fitTerminal);
+  permTerminals.forEach(fitTerminal);
 });
 
 // Sidebar Toggle
@@ -1063,7 +1038,8 @@ document.getElementById('sidebarToggle')?.addEventListener('click', () => {
   sidebar.classList.toggle('collapsed');
   // Wait for transition, then fit terminals
   setTimeout(() => {
-    terminals.forEach(t => t.fit.fit());
+    terminals.forEach(fitTerminal);
+    permTerminals.forEach(fitTerminal);
   }, 300);
 });
 
