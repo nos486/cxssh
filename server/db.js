@@ -71,6 +71,13 @@ function initDb() {
       last_used TEXT,
       FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS perm_sessions (
+      id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+    );
   `);
 
   // Non-destructive migrations for existing databases
@@ -148,6 +155,23 @@ function createSession(s) { getDb().prepare('INSERT INTO sessions (id,name,serve
 function deleteSession(id) { getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id); }
 function touchSession(id) { getDb().prepare("UPDATE sessions SET last_used = datetime('now') WHERE id = ?").run(id); }
 
+// Perm Sessions
+function getPermSessions() {
+  return getDb().prepare(`
+    SELECT ps.id, ps.server_id, ps.created_at,
+           s.name as server_name, s.host, s.port, s.username, s.label_color,
+           s.auth_type, s.password, s.private_key, s.key_id, s.proxy_id
+    FROM perm_sessions ps
+    LEFT JOIN servers s ON ps.server_id = s.id
+    ORDER BY ps.created_at ASC
+  `).all();
+}
+function createPermSession(id, serverId) {
+  getDb().prepare('INSERT OR IGNORE INTO perm_sessions (id, server_id) VALUES (?, ?)').run(id, serverId);
+  return getPermSessions().find(s => s.id === id);
+}
+function deletePermSession(id) { getDb().prepare('DELETE FROM perm_sessions WHERE id = ?').run(id); }
+
 module.exports = {
   initDb, getUserByUsername,
   getKeys, getKeyById, createKey, deleteKey,
@@ -155,4 +179,5 @@ module.exports = {
   getServers, getServerById, createServer, updateServer, deleteServer, touchServer,
   getTempServerById, createTempServer,
   getSessions, getSessionById, createSession, deleteSession, touchSession,
+  getPermSessions, createPermSession, deletePermSession,
 };

@@ -359,6 +359,8 @@ html, body {
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-bright); transform: translateY(-1px); }
 .btn-danger { background: var(--danger-dim); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
 .btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-warning { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.25); }
+.btn-warning:hover { background: var(--warning); color: #0d0d0d; }
 .btn-sm { padding: 5px 11px; font-size: 12.5px; }
 .btn-icon { padding: 7px; }
 .w-full { width: 100%; justify-content: center; }

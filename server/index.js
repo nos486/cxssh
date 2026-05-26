@@ -6,7 +6,8 @@ const { initDb } = require('./db');
 const { router: authRouter, requireAuth } = require('./auth');
 const serversRouter = require('./routes/servers');
 const keysRouter    = require('./routes/keys');
-const proxyRouter   = require('./routes/proxy');
+const proxyRouter        = require('./routes/proxy');
+const permSessionsRouter = require('./routes/perm-sessions');
 const { setupWebSocket } = require('./ws');
 
 const PORT = process.env.PORT || 3000;
@@ -19,8 +20,9 @@ app.use(express.static(path.join(__dirname, '../public')));
 // API
 app.use('/api/auth',     authRouter);
 app.use('/api/servers',  serversRouter);
-app.use('/api/keys',     keysRouter);
-app.use('/api/proxies',  proxyRouter);
+app.use('/api/keys',          keysRouter);
+app.use('/api/proxies',       proxyRouter);
+app.use('/api/perm-sessions', permSessionsRouter);
 
 // Routes
 app.get('/app',       (req, res) => res.sendFile(path.join(__dirname, '../public/app.html')));

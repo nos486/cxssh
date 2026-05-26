@@ -45,6 +45,14 @@
           <span id="tabCountBadge" class="badge badge-accent nav-badge" style="display:none;">0</span>
         </div>
 
+        <div class="nav-item" data-view="perm" title="Permanent Workspace">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <span class="nav-text">Permanent</span>
+          <span id="permCountBadge" class="badge badge-warning nav-badge" style="display:none;">0</span>
+        </div>
+
 
 
         <div class="sidebar-section-label" style="margin-top: 8px;">Security</div>
@@ -165,6 +173,30 @@
         </div>
         <div class="terminal-workspace layout-grid" id="termWorkspace">
           <!-- Terminal windows injected here -->
+        </div>
+      </section>
+
+      <!-- ── Permanent Workspace View ── -->
+      <section id="view-perm" class="view-container terminal-view">
+        <div class="terminal-header">
+          <div class="term-header-left">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span class="term-header-label" style="color:var(--warning)">Permanent Sessions</span>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:4px">— survive page refresh</span>
+          </div>
+          <div class="terminal-tabs" id="permTabs"></div>
+          <div class="term-header-actions">
+            <div class="layout-divider"></div>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn active" id="permLayoutGridBtn" title="Tile Grid">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </button>
+            <button class="btn btn-ghost btn-sm btn-icon layout-btn" id="permLayoutStackBtn" title="Tab View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="terminal-workspace layout-grid" id="permWorkspace">
+          <!-- Permanent terminal windows injected here -->
         </div>
       </section>
 

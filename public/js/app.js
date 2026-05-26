@@ -35,8 +35,10 @@ function showToast(message, type = 'info') {
 let servers = [];
 let keys = [];
 let proxies = [];
-let terminals = []; // Array of { id, serverId, server, term, fit, ws, status, resumeKey, isTemp }
+let terminals = [];     // ephemeral terminals
+let permTerminals = []; // permanent terminals
 let activeWindowId = null;
+let activePermWindowId = null;
 let currentView = 'dashboard';
 let editingId = null;
 let selectedColor = '#6366f1';
@@ -79,7 +81,10 @@ function switchView(viewId) {
   if (viewId === 'keys') loadKeys();
   if (viewId === 'proxies') loadProxies();
   if (viewId === 'terminal') {
-    setTimeout(() => terminals.forEach(t => t.fit.fit()), 100);
+    setTimeout(() => terminals.forEach(t => t.fit && t.fit.fit()), 100);
+  }
+  if (viewId === 'perm') {
+    setTimeout(() => permTerminals.forEach(t => t.fit && t.fit.fit()), 100);
   }
 }
 
@@ -127,10 +132,14 @@ function renderServers() {
         <span class="badge badge-accent">${s.auth_type.replace('_',' ')}</span>
         ${s.proxy_id ? '<span class="badge badge-warning">Tunneled</span>' : ''}
       </div>
-      <div class="server-card-connect">
-        <button class="btn btn-primary w-full" onclick="connectToServer('${s.id}')">
+      <div class="server-card-connect" style="display:flex;gap:6px">
+        <button class="btn btn-primary" style="flex:1" onclick="connectToServer('${s.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           Connect
+        </button>
+        <button class="btn btn-warning" style="flex:1" onclick="connectPermServer('${s.id}')" title="Open in Permanent Workspace">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Permanent
         </button>
       </div>
     </div>
@@ -432,7 +441,259 @@ function setLayout(mode) {
   });
 }
 
+function setPermLayout(mode) {
+  const ws = document.getElementById('permWorkspace');
+  ws.classList.remove('layout-tabs', 'layout-grid');
+  ws.classList.add('layout-' + mode);
+  permTerminals.forEach(t => {
+    if (t.fit) t.fit.fit();
+  });
+}
+
+// ── Permanent Workspace ───────────────────────────────────────────────────────
+
+function focusPermWindow(id) {
+  activePermWindowId = id;
+  permTerminals.forEach(t => {
+    t.el.classList.toggle('active', t.id === id);
+    if (t.id === id) t.term.focus();
+  });
+  updatePermTabBadge();
+}
+
+function updatePermTabBadge() {
+  const container = document.getElementById('permTabs');
+  if (!container) return;
+
+  container.innerHTML = permTerminals.map(t => {
+    const isDisconnected = !t.ws || t.ws.readyState !== 1;
+    return `
+    <div class="terminal-tab ${t.id === activePermWindowId ? 'active' : ''}" onclick="focusPermWindow('${t.id}')">
+      <span class="color-dot" style="background:${t.server.label_color || '#f59e0b'}"></span>
+      <span>${isDisconnected ? '🔌 ' : '📌 '}${esc(t.server.name || t.server.server_name)}</span>
+      <span class="tab-close" onclick="event.stopPropagation(); closePermTerminal('${t.id}')" title="Detach (keeps running)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </span>
+    </div>
+  `}).join('');
+
+  const badge = document.getElementById('permCountBadge');
+  if (badge) {
+    badge.textContent = permTerminals.length;
+    badge.style.display = permTerminals.length > 0 ? '' : 'none';
+  }
+}
+
+// Open a terminal pane in the perm workspace (does NOT create a DB record)
+function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
+  const winId = 'pwin_' + Math.random().toString(36).substr(2, 9);
+  const serverName = server.name || server.server_name || server.host;
+
+  if (shouldFocus) {
+    permTerminals.forEach(t => t.el.classList.remove('active'));
+    activePermWindowId = winId;
+  }
+
+  const win = document.createElement('div');
+  win.className = 'term-window' + (shouldFocus ? ' active' : '');
+  win.id = winId;
+  win.innerHTML = `
+    <div class="term-window-header" style="border-bottom-color: rgba(245,158,11,0.3);">
+      <div class="term-window-title">
+        <span class="color-dot" style="background:${server.label_color || '#f59e0b'}"></span>
+        <span style="color:var(--warning);margin-right:4px;font-size:11px">📌</span>
+        ${esc(serverName)} (${esc(server.host)})
+      </div>
+      <div class="term-window-controls">
+        <button class="win-btn" onclick="killPermSession('${resumeKey}','${winId}')" title="Terminate session permanently"
+          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444;margin-right:4px;">
+          Kill
+        </button>
+        <button class="win-btn win-close" onclick="closePermTerminal('${winId}')" title="Detach (keeps running)"></button>
+      </div>
+    </div>
+    <div class="term-window-body" id="body_${winId}"></div>
+    <div class="resizer"></div>
+  `;
+
+  document.getElementById('permWorkspace').appendChild(win);
+
+  const term = new Terminal({
+    theme: termTheme,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 13, lineHeight: 1.2, cursorBlink: true, allowProposedApi: true
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+  const body = document.getElementById(`body_${winId}`);
+  term.open(body);
+
+  const termObj = {
+    id: winId, resumeKey, serverId: server.server_id || server.id,
+    server, term, fit, ws: null, status: 'connecting', el: win
+  };
+  permTerminals.push(termObj);
+
+  // Resize observer
+  const ro = new ResizeObserver(() => {
+    try {
+      fit.fit();
+      if (termObj.ws && termObj.ws.readyState === 1) {
+        termObj.ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    } catch {}
+  });
+  ro.observe(body);
+  termObj.ro = ro;
+
+  win.addEventListener('mousedown', () => focusPermWindow(winId));
+
+  // Resizer
+  const resizer = win.querySelector('.resizer');
+  if (resizer) {
+    let startX, startWidth;
+    resizer.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startX = e.clientX; startWidth = win.getBoundingClientRect().width;
+      const overlay = document.createElement('div');
+      Object.assign(overlay.style, { position:'fixed', top:0, left:0, width:'100vw', height:'100vh', cursor:'col-resize', zIndex:9999 });
+      document.body.appendChild(overlay);
+      const doDrag = mv => {
+        win.style.flex = `0 0 ${Math.max(200, startWidth + mv.clientX - startX)}px`;
+        try { fit.fit(); } catch {}
+      };
+      const stopDrag = () => {
+        document.removeEventListener('mousemove', doDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        overlay.remove();
+        setTimeout(() => permTerminals.forEach(t => { try { t.fit.fit(); } catch {} }), 50);
+      };
+      document.addEventListener('mousemove', doDrag);
+      document.addEventListener('mouseup', stopDrag);
+    });
+    resizer.addEventListener('dblclick', () => {
+      win.style.flex = '1';
+      setTimeout(() => permTerminals.forEach(t => { try { t.fit.fit(); } catch {} }), 50);
+    });
+  }
+
+  return termObj;
+}
+
+// Initiate WS for a permanent session
+function initPermWebSocket(termObj) {
+  const cols = termObj.term.cols || 80;
+  const rows = termObj.term.rows || 24;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/ws/ssh?token=${encodeURIComponent(getToken())}&serverId=${encodeURIComponent(termObj.serverId)}&resumeKey=${encodeURIComponent(termObj.resumeKey)}&cols=${cols}&rows=${rows}`;
+
+  termObj.ws = new WebSocket(url);
+  termObj.ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'connected') {
+      termObj.status = 'connected';
+      updatePermTabBadge();
+    } else if (m.type === 'output') {
+      const bytes = new Uint8Array(m.data.length);
+      for (let i = 0; i < m.data.length; i++) bytes[i] = m.data.charCodeAt(i);
+      termObj.term.write(bytes);
+    } else if (m.type === 'error' || m.type === 'disconnect') {
+      termObj.status = 'error';
+      termObj.term.writeln(`\r\n\x1b[31m✖ ${m.data}\x1b[0m`);
+      updatePermTabBadge();
+    }
+  };
+  termObj.ws.onclose = () => {
+    termObj.status = 'disconnected';
+    updatePermTabBadge();
+  };
+  termObj.term.onData(data => {
+    if (termObj.ws && termObj.ws.readyState === 1) termObj.ws.send(JSON.stringify({ type: 'input', data }));
+  });
+  setInterval(() => {
+    if (termObj.ws && termObj.ws.readyState === 1) termObj.ws.send(JSON.stringify({ type: 'ping' }));
+  }, 15000);
+}
+
+// Create new permanent session (Perm Connect button on server card)
+async function connectPermServer(serverId) {
+  const server = servers.find(s => s.id === serverId);
+  if (!server) return showToast('Server not found', 'error');
+
+  showToast(`Opening permanent session for ${server.name}…`, 'info');
+
+  const res = await api('POST', '/api/perm-sessions', { serverId });
+  if (!res || !res.id) return showToast('Failed to create permanent session', 'error');
+
+  // Merge server info into the session record for display
+  const sessionRecord = { ...res, ...server, server_id: serverId };
+  const termObj = openPermTerminalPane(sessionRecord, res.id, true);
+
+  switchView('perm');
+  setTimeout(() => {
+    try {
+      termObj.fit.fit();
+      initPermWebSocket(termObj);
+      updatePermTabBadge();
+      focusPermWindow(termObj.id);
+    } catch (e) { console.warn('Perm init error', e); }
+  }, 50);
+}
+
+// Restore all permanent sessions on page load
+async function restorePermWorkspace() {
+  const sessions = await api('GET', '/api/perm-sessions');
+  if (!sessions || sessions.length === 0) return;
+
+  for (const session of sessions) {
+    const termObj = openPermTerminalPane(session, session.id, sessions.indexOf(session) === 0);
+    // Small stagger to avoid hammering the backend
+    await new Promise(r => setTimeout(r, 80));
+    try {
+      termObj.fit.fit();
+      initPermWebSocket(termObj);
+    } catch {}
+  }
+  updatePermTabBadge();
+}
+
+// Detach (close UI pane but keep SSH running on server)
+function closePermTerminal(winId) {
+  const idx = permTerminals.findIndex(t => t.id === winId);
+  if (idx === -1) return;
+  const t = permTerminals[idx];
+  if (t.ws) t.ws.close(); // closes WS, SSH keeps running in registry
+  if (t.ro) t.ro.disconnect();
+  t.term.dispose();
+  t.el.remove();
+  permTerminals.splice(idx, 1);
+  updatePermTabBadge();
+}
+
+// Kill: terminate SSH + remove from DB
+window.killPermSession = async (resumeKey, winId) => {
+  if (!confirm('Terminate this permanent session on the server?')) return;
+  await api('DELETE', `/api/perm-sessions/${resumeKey}`);
+  closePermTerminal(winId);
+  showToast('Permanent session terminated', 'success');
+};
+
+// Perm layout buttons
+document.getElementById('permLayoutGridBtn')?.addEventListener('click', () => {
+  setPermLayout('grid');
+  document.getElementById('permLayoutGridBtn').classList.add('active');
+  document.getElementById('permLayoutStackBtn').classList.remove('active');
+});
+document.getElementById('permLayoutStackBtn')?.addEventListener('click', () => {
+  setPermLayout('tabs');
+  document.getElementById('permLayoutStackBtn').classList.add('active');
+  document.getElementById('permLayoutGridBtn').classList.remove('active');
+});
+
 // ── Temporary Window Manager (Quick Connect) ──
+
 document.getElementById('qcAuthType')?.addEventListener('change', (e) => {
   document.getElementById('qcKeyGroup').style.display = e.target.value === 'managed_key' ? 'block' : 'none';
 });
@@ -460,7 +721,7 @@ document.getElementById('btnQuickConnect')?.addEventListener('click', async () =
   
   if (res && res.success) {
     document.getElementById('qcPassword').value = '';
-    connectToServer(res.id, null, true, true);
+    connectToServer(res.id, true);
   } else {
     showToast(res?.error || 'Failed to start temporary session', 'error');
   }
@@ -783,20 +1044,21 @@ async function boot() {
     document.getElementById('userAvatar').textContent = data.username[0].toUpperCase();
   }
   initColorPicker();
-  // Load everything on boot to ensure forms have data
   await Promise.all([
     loadServers(),
     loadKeys(),
     loadProxies()
   ]);
   await restoreWorkspace();
+  await restorePermWorkspace();
 }
 
 boot();
 
 // Handle global resize
 window.addEventListener('resize', () => {
-  terminals.forEach(t => t.fit.fit());
+  terminals.forEach(t => t.fit && t.fit.fit());
+  permTerminals.forEach(t => t.fit && t.fit.fit());
 });
 
 // Sidebar Toggle
