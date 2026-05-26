@@ -272,7 +272,7 @@ html, body {
 }
 .term-window.active { border-color: rgba(79,70,229,0.5); box-shadow: 0 0 0 1px rgba(79,70,229,0.25); z-index: 5; }
 
-.layout-tabs .term-window { display: none; width: 100%; height: 100%; flex: 1; border-radius: 0; border: none; }
+.layout-tabs .term-window { display: none; width: 100% !important; height: 100% !important; flex: 1 1 auto !important; border-radius: 0; border: none; }
 .layout-tabs .term-window.active { display: flex; }
 
 .layout-grid { flex-wrap: nowrap; }
