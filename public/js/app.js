@@ -243,7 +243,11 @@ async function connectToServer(serverId, shouldFocus = true) {
         <span class="color-dot" style="background:${server.label_color}"></span>
         ${esc(server.name)} (${esc(server.host)})
       </div>
-      <div class="term-window-controls">
+      <div class="term-window-controls" style="display:flex;align-items:center;">
+        <button class="win-btn" onclick="window.fitSingleTerminal('${winId}')" title="Fit terminal size"
+          style="width:auto;padding:0 6px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(99,102,241,0.15);color:var(--accent);margin-right:6px;height:18px;line-height:18px;border:none;cursor:pointer;">
+          Fit
+        </button>
         <button class="win-btn win-close" onclick="closeTerminal('${winId}')"></button>
       </div>
     </div>
@@ -483,9 +487,13 @@ function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
         <span style="color:var(--warning);margin-right:4px;font-size:11px">📌</span>
         ${esc(serverName)} (${esc(server.host)})
       </div>
-      <div class="term-window-controls">
+      <div class="term-window-controls" style="display:flex;align-items:center;">
+        <button class="win-btn" onclick="window.fitSinglePermTerminal('${winId}')" title="Fit terminal size"
+          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(99,102,241,0.15);color:var(--accent);margin-right:6px;height:18px;line-height:18px;border:none;cursor:pointer;">
+          Fit
+        </button>
         <button class="win-btn" onclick="killPermSession('${resumeKey}','${winId}')" title="Terminate session permanently"
-          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444;">
+          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444;height:18px;line-height:18px;border:none;cursor:pointer;">
           Kill
         </button>
       </div>
@@ -649,6 +657,22 @@ window.killPermSession = async (resumeKey, winId) => {
   await api('DELETE', `/api/perm-sessions/${resumeKey}`);
   closePermTerminal(winId);
   showToast('Permanent session terminated', 'success');
+};
+
+window.fitSinglePermTerminal = (winId) => {
+  const t = permTerminals.find(x => x.id === winId);
+  if (t) {
+    fitTerminal(t);
+    showToast('Terminal size synchronized', 'success');
+  }
+};
+
+window.fitSingleTerminal = (winId) => {
+  const t = terminals.find(x => x.id === winId);
+  if (t) {
+    fitTerminal(t);
+    showToast('Terminal size synchronized', 'success');
+  }
 };
 
 // Perm layout buttons
