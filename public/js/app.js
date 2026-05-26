@@ -407,6 +407,14 @@ function closeTerminal(id) {
   t.el.remove();
   terminals.splice(idx, 1);
   
+  if (activeWindowId === id) {
+    if (terminals.length > 0) {
+      focusWindow(terminals[0].id);
+    } else {
+      activeWindowId = null;
+    }
+  }
+  
   updateTabBadge();
   persistWorkspace();
 }
@@ -694,6 +702,15 @@ function closePermTerminal(winId) {
   t.term.dispose();
   t.el.remove();
   permTerminals.splice(idx, 1);
+  
+  if (activePermWindowId === winId) {
+    if (permTerminals.length > 0) {
+      focusPermWindow(permTerminals[0].id);
+    } else {
+      activePermWindowId = null;
+    }
+  }
+  
   updatePermTabBadge();
 }
 
