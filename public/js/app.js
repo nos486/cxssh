@@ -471,9 +471,6 @@ function updatePermTabBadge() {
     <div class="terminal-tab ${t.id === activePermWindowId ? 'active' : ''}" onclick="focusPermWindow('${t.id}')">
       <span class="color-dot" style="background:${t.server.label_color || '#f59e0b'}"></span>
       <span>${isDisconnected ? '🔌 ' : '📌 '}${esc(t.server.name || t.server.server_name)}</span>
-      <span class="tab-close" onclick="event.stopPropagation(); closePermTerminal('${t.id}')" title="Detach (keeps running)">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </span>
     </div>
   `}).join('');
 
@@ -506,10 +503,9 @@ function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
       </div>
       <div class="term-window-controls">
         <button class="win-btn" onclick="killPermSession('${resumeKey}','${winId}')" title="Terminate session permanently"
-          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444;margin-right:4px;">
+          style="width:auto;padding:0 8px;font-size:10px;font-weight:600;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444;">
           Kill
         </button>
-        <button class="win-btn win-close" onclick="closePermTerminal('${winId}')" title="Detach (keeps running)"></button>
       </div>
     </div>
     <div class="term-window-body" id="body_${winId}"></div>
