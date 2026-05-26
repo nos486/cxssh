@@ -737,9 +737,14 @@ function closePermTerminal(winId) {
 // Kill: terminate SSH + remove from DB
 window.killPermSession = async (resumeKey, winId) => {
   if (!confirm('Terminate this permanent session on the server?')) return;
-  await api('DELETE', `/api/perm-sessions/${resumeKey}`);
   closePermTerminal(winId);
-  showToast('Permanent session terminated', 'success');
+  try {
+    await api('DELETE', `/api/perm-sessions/${resumeKey}`);
+    showToast('Permanent session terminated', 'success');
+  } catch (err) {
+    console.error('Failed to kill permanent session', err);
+    showToast('Failed to terminate session on server', 'error');
+  }
 };
 
 window.fitSinglePermTerminal = (winId) => {
