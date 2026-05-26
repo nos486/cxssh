@@ -44,8 +44,8 @@ let editingId = null;
 let selectedColor = '#6366f1';
 
 const termTheme = {
-  background: '#18181b', foreground: '#e2e8f0', cursor: '#6366f1', cursorAccent: '#18181b',
-  selection: 'rgba(99,102,241,0.3)', black: '#1e293b', red: '#ef4444', green: '#22c55e',
+  background: '#1c1c1c', foreground: '#e2e8f0', cursor: '#6366f1', cursorAccent: '#1c1c1c',
+  selection: 'rgba(99,102,241,0.3)', black: '#2d3748', red: '#ef4444', green: '#22c55e',
   yellow: '#f59e0b', blue: '#6366f1', magenta: '#a855f7', cyan: '#06b6d4', white: '#f1f5f9',
   brightBlack: '#475569', brightRed: '#f87171', brightGreen: '#4ade80', brightYellow: '#fbbf24',
   brightBlue: '#818cf8', brightMagenta: '#c084fc', brightCyan: '#22d3ee', brightWhite: '#ffffff',

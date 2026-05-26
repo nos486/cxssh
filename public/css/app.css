@@ -311,7 +311,7 @@ html, body {
 .win-close { background: #ff5f56; }
 .term-window-title { flex: 1; font-size: 11.5px; font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 .term-window.active .term-window-title { color: var(--text-secondary); }
-.term-window-body { flex: 1; position: relative; overflow: hidden; background: #18181b; }
+.term-window-body { flex: 1; position: relative; overflow: hidden; background: #000; }
 
 /* ── Server cards ── */
 .server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
