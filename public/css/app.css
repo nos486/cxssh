@@ -479,3 +479,8 @@ html, body {
 .flex-1 { flex: 1; }
 .text-sm { font-size: 12.5px; }
 .text-muted { color: var(--text-secondary); }
+
+/* Force standard highly-visible white arrow pointer inside terminals */
+.xterm, .xterm-screen, .xterm-screen *, .xterm-rows, .xterm-rows * {
+  cursor: default !important;
+}
