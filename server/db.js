@@ -161,7 +161,7 @@ function touchSession(id) { getDb().prepare("UPDATE sessions SET last_used = dat
 function getPermSessions() {
   return getDb().prepare(`
     SELECT ps.id, ps.server_id, ps.created_at,
-           s.name as server_name, s.host, s.port, s.username, s.label_color,
+           s.name as server_name, s.host, s.port, s.username, s.label_color, s.term_theme,
            s.auth_type, s.password, s.private_key, s.key_id, s.proxy_id
     FROM perm_sessions ps
     LEFT JOIN servers s ON ps.server_id = s.id
