@@ -56,7 +56,7 @@ router.get('/:id', requireAuth, (req, res) => {
 
 // POST /api/servers
 router.post('/', requireAuth, (req, res) => {
-  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id, label_color, notes } = req.body;
+  const { name, host, port, username, auth_type, password, private_key, key_id, proxy_id, label_color, term_theme, notes } = req.body;
   if (!name || !host || !username) return res.status(400).json({ error: 'name, host, and username are required' });
   const s = createServer({
     id: uuidv4(), name, host, port: port || 22, username,
@@ -66,6 +66,7 @@ router.post('/', requireAuth, (req, res) => {
     key_id: key_id || null,
     proxy_id: proxy_id || null,
     label_color: label_color || '#6366f1',
+    term_theme: term_theme || 'default',
     notes: notes || null,
   });
   res.status(201).json({ success: true, ...sanitize(s) });
@@ -92,7 +93,7 @@ router.post('/temp', requireAuth, (req, res) => {
 // PUT /api/servers/:id
 router.put('/:id', requireAuth, (req, res) => {
   if (!getServerById(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','notes'];
+  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','term_theme','notes'];
   const fields = {};
   for (const k of allowed) if (req.body[k] !== undefined) fields[k] = req.body[k];
   const s = updateServer(req.params.id, fields);

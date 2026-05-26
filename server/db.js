@@ -57,6 +57,7 @@ function initDb() {
       key_id TEXT REFERENCES ssh_keys(id) ON DELETE SET NULL,
       proxy_id TEXT REFERENCES proxies(id) ON DELETE SET NULL,
       label_color TEXT DEFAULT '#6366f1',
+      term_theme TEXT DEFAULT 'default',
       notes TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       last_connected TEXT
@@ -84,6 +85,7 @@ function initDb() {
   const migrations = [
     `ALTER TABLE servers ADD COLUMN key_id TEXT REFERENCES ssh_keys(id) ON DELETE SET NULL`,
     `ALTER TABLE servers ADD COLUMN proxy_id TEXT REFERENCES proxies(id) ON DELETE SET NULL`,
+    `ALTER TABLE servers ADD COLUMN term_theme TEXT DEFAULT 'default'`,
   ];
   for (const m of migrations) {
     try { d.exec(m); } catch {}
@@ -125,12 +127,12 @@ function deleteProxy(id) { getDb().prepare('DELETE FROM proxies WHERE id = ?').r
 function getServers() { return getDb().prepare('SELECT * FROM servers ORDER BY name ASC').all(); }
 function getServerById(id) { return getDb().prepare('SELECT * FROM servers WHERE id = ?').get(id); }
 function createServer(s) {
-  getDb().prepare(`INSERT INTO servers (id,name,host,port,username,auth_type,password,private_key,key_id,proxy_id,label_color,notes)
-    VALUES (@id,@name,@host,@port,@username,@auth_type,@password,@private_key,@key_id,@proxy_id,@label_color,@notes)`).run(s);
+  getDb().prepare(`INSERT INTO servers (id,name,host,port,username,auth_type,password,private_key,key_id,proxy_id,label_color,term_theme,notes)
+    VALUES (@id,@name,@host,@port,@username,@auth_type,@password,@private_key,@key_id,@proxy_id,@label_color,@term_theme,@notes)`).run(s);
   return getServerById(s.id);
 }
 function updateServer(id, fields) {
-  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','notes'];
+  const allowed = ['name','host','port','username','auth_type','password','private_key','key_id','proxy_id','label_color','term_theme','notes'];
   const sets = Object.keys(fields).filter(k => allowed.includes(k)).map(k => `${k} = @${k}`).join(', ');
   if (!sets) return null;
   getDb().prepare(`UPDATE servers SET ${sets} WHERE id = @id`).run({ ...fields, id });

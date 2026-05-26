@@ -43,12 +43,56 @@ let currentView = 'dashboard';
 let editingId = null;
 let selectedColor = '#6366f1';
 
-const termTheme = {
-  background: '#1c1c1c', foreground: '#e2e8f0', cursor: '#6366f1', cursorAccent: '#1c1c1c',
-  selection: 'rgba(99,102,241,0.3)', black: '#2d3748', red: '#ef4444', green: '#22c55e',
-  yellow: '#f59e0b', blue: '#6366f1', magenta: '#a855f7', cyan: '#06b6d4', white: '#f1f5f9',
-  brightBlack: '#475569', brightRed: '#f87171', brightGreen: '#4ade80', brightYellow: '#fbbf24',
-  brightBlue: '#818cf8', brightMagenta: '#c084fc', brightCyan: '#22d3ee', brightWhite: '#ffffff',
+const termThemes = {
+  default: {
+    background: '#1c1c1c', foreground: '#e2e8f0', cursor: '#6366f1', cursorAccent: '#1c1c1c',
+    selection: 'rgba(99,102,241,0.3)', black: '#2d3748', red: '#ef4444', green: '#22c55e',
+    yellow: '#f59e0b', blue: '#6366f1', magenta: '#a855f7', cyan: '#06b6d4', white: '#f1f5f9',
+    brightBlack: '#475569', brightRed: '#f87171', brightGreen: '#4ade80', brightYellow: '#fbbf24',
+    brightBlue: '#818cf8', brightMagenta: '#c084fc', brightCyan: '#22d3ee', brightWhite: '#ffffff',
+  },
+  midnight: {
+    background: '#0a0f1d', foreground: '#cbd5e1', cursor: '#3b82f6', cursorAccent: '#0a0f1d',
+    selection: 'rgba(59,130,246,0.3)', black: '#1e293b', red: '#f43f5e', green: '#10b981',
+    yellow: '#f59e0b', blue: '#3b82f6', magenta: '#8b5cf6', cyan: '#06b6d4', white: '#f8fafc',
+    brightBlack: '#64748b', brightRed: '#fda4af', brightGreen: '#6ee7b7', brightYellow: '#fde047',
+    brightBlue: '#93c5fd', brightMagenta: '#c084fc', brightCyan: '#67e8f9', brightWhite: '#ffffff',
+  },
+  dracula: {
+    background: '#282a36', foreground: '#f8f8f2', cursor: '#ff79c6', cursorAccent: '#282a36',
+    selection: 'rgba(255,121,198,0.3)', black: '#21222c', red: '#ff5555', green: '#50fa7b',
+    yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
+    brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5',
+    brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff',
+  },
+  matrix: {
+    background: '#000000', foreground: '#00ff00', cursor: '#00ff00', cursorAccent: '#000000',
+    selection: 'rgba(0,255,0,0.2)', black: '#000000', red: '#aa0000', green: '#00aa00',
+    yellow: '#aa5500', blue: '#0000aa', magenta: '#aa00aa', cyan: '#00aaaa', white: '#aaaaaa',
+    brightBlack: '#555555', brightRed: '#ff5555', brightGreen: '#55ff55', brightYellow: '#ffff55',
+    brightBlue: '#5555ff', brightMagenta: '#ff55ff', brightCyan: '#55ffff', brightWhite: '#ffffff',
+  },
+  solarized: {
+    background: '#002b36', foreground: '#839496', cursor: '#93a1a1', cursorAccent: '#002b36',
+    selection: 'rgba(147,161,161,0.2)', black: '#073642', red: '#dc322f', green: '#859900',
+    yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
+    brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83',
+    brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3',
+  },
+  nord: {
+    background: '#2e3440', foreground: '#d8dee9', cursor: '#88c0d0', cursorAccent: '#2e3440',
+    selection: 'rgba(136,192,208,0.3)', black: '#3b4252', red: '#bf616a', green: '#a3be8c',
+    yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0',
+    brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b',
+    brightBlue: '#8fbcbb', brightMagenta: '#b48ead', brightCyan: '#88c0d0', brightWhite: '#eceff4',
+  },
+  paper: {
+    background: '#f5f5f5', foreground: '#1f2937', cursor: '#4f46e5', cursorAccent: '#f5f5f5',
+    selection: 'rgba(79,70,229,0.15)', black: '#111827', red: '#ef4444', green: '#10b981',
+    yellow: '#f59e0b', blue: '#3b82f6', magenta: '#8b5cf6', cyan: '#06b6d4', white: '#f9fafb',
+    brightBlack: '#6b7280', brightRed: '#fca5a5', brightGreen: '#6ee7b7', brightYellow: '#fde047',
+    brightBlue: '#93c5fd', brightMagenta: '#c084fc', brightCyan: '#67e8f9', brightWhite: '#ffffff',
+  }
 };
 
 // ── Persistence ──
@@ -257,8 +301,9 @@ async function connectToServer(serverId, shouldFocus = true) {
   
   document.getElementById('termWorkspace').appendChild(win);
 
+  const selectedTheme = termThemes[server.term_theme] || termThemes.default;
   const term = new Terminal({
-    theme: termTheme,
+    theme: selectedTheme,
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 13,
     lineHeight: 1.2,
@@ -504,8 +549,9 @@ function openPermTerminalPane(server, resumeKey, shouldFocus = true) {
 
   document.getElementById('permWorkspace').appendChild(win);
 
+  const selectedTheme = termThemes[server.term_theme] || termThemes.default;
   const term = new Terminal({
-    theme: termTheme,
+    theme: selectedTheme,
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 13, lineHeight: 1.2, cursorBlink: true, allowProposedApi: true
   });
@@ -817,6 +863,7 @@ function resetServerForm() {
   document.getElementById('sPrivateKey').value = '';
   document.getElementById('sAuthType').value = 'password';
   document.getElementById('sAuthType').dispatchEvent(new Event('change'));
+  document.getElementById('sTermTheme').value = 'default';
   selectColor('#6366f1');
   populateSelectors();
 }
@@ -839,6 +886,7 @@ window.openEditServer = async (id) => {
   document.getElementById('sUsername').value = s.username;
   document.getElementById('sAuthType').value = s.auth_type;
   document.getElementById('sAuthType').dispatchEvent(new Event('change'));
+  document.getElementById('sTermTheme').value = s.term_theme || 'default';
   
   if (s.auth_type === 'managed_key') document.getElementById('sKeyId').value = s.key_id || '';
   if (s.proxy_id) document.getElementById('sProxyId').value = s.proxy_id;
@@ -857,7 +905,8 @@ document.getElementById('saveServerBtn')?.addEventListener('click', async () => 
     private_key: document.getElementById('sPrivateKey').value,
     key_id: document.getElementById('sKeyId').value || null,
     proxy_id: document.getElementById('sProxyId').value || null,
-    label_color: selectedColor
+    label_color: selectedColor,
+    term_theme: document.getElementById('sTermTheme').value || 'default'
   };
   
   if (!data.name || !data.host || !data.username) return showToast('Please fill required fields', 'error');
