@@ -95,6 +95,26 @@ const termThemes = {
   }
 };
 
+function updateThemePreview(themeName) {
+  const theme = termThemes[themeName] || termThemes.default;
+  const box = document.getElementById('themePreviewBox');
+  if (!box) return;
+  box.style.backgroundColor = theme.background;
+  box.style.borderColor = 'rgba(255,255,255,0.1)';
+
+  const prompt = document.getElementById('previewPrompt');
+  const input = document.getElementById('previewInput');
+  const f1 = document.getElementById('previewFile1');
+  const f2 = document.getElementById('previewFile2');
+  const f3 = document.getElementById('previewFile3');
+
+  if (prompt) prompt.style.color = theme.green;
+  if (input) input.style.color = theme.foreground;
+  if (f1) f1.style.color = theme.blue;
+  if (f2) f2.style.color = theme.foreground;
+  if (f3) f3.style.color = theme.yellow;
+}
+
 // ── Persistence ──
 function persistWorkspace() {
   // No-op: Sessions are purely ephemeral now
@@ -881,6 +901,7 @@ function resetServerForm() {
   document.getElementById('sAuthType').value = 'password';
   document.getElementById('sAuthType').dispatchEvent(new Event('change'));
   document.getElementById('sTermTheme').value = 'default';
+  updateThemePreview('default');
   selectColor('#6366f1');
   populateSelectors();
 }
@@ -889,6 +910,10 @@ document.getElementById('sAuthType')?.addEventListener('change', (e) => {
   document.querySelectorAll('.auth-fields').forEach(f => f.style.display = 'none');
   const target = document.getElementById('auth-' + e.target.value);
   if (target) target.style.display = 'block';
+});
+
+document.getElementById('sTermTheme')?.addEventListener('change', (e) => {
+  updateThemePreview(e.target.value);
 });
 
 window.openEditServer = async (id) => {
@@ -903,7 +928,9 @@ window.openEditServer = async (id) => {
   document.getElementById('sUsername').value = s.username;
   document.getElementById('sAuthType').value = s.auth_type;
   document.getElementById('sAuthType').dispatchEvent(new Event('change'));
-  document.getElementById('sTermTheme').value = s.term_theme || 'default';
+  const themeVal = s.term_theme || 'default';
+  document.getElementById('sTermTheme').value = themeVal;
+  updateThemePreview(themeVal);
   
   if (s.auth_type === 'managed_key') document.getElementById('sKeyId').value = s.key_id || '';
   if (s.proxy_id) document.getElementById('sProxyId').value = s.proxy_id;

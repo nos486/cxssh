@@ -310,6 +310,22 @@
             <option value="nord">Nord</option>
             <option value="paper">Paper Light</option>
           </select>
+          <div id="themePreviewBox" style="margin-top: 8px; border-radius: 6px; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; border: 1px solid var(--border); transition: background-color 0.2s, color 0.2s;">
+            <div style="display: flex; gap: 4px; margin-bottom: 6px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #fbbf24;"></span>
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></span>
+            </div>
+            <div>
+              <span id="previewPrompt" style="color: #22c55e;">root@cxssh:~#</span>
+              <span id="previewInput" style="margin-left: 4px;">ls -la</span>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 8px;">
+              <span id="previewFile1" style="font-weight: bold;">.config</span>
+              <span id="previewFile2">app.js</span>
+              <span id="previewFile3">README.md</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
